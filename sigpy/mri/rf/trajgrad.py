@@ -4,8 +4,48 @@
 
 import numpy as np
 
-__all__ = ['trap_grad', 'spiral_varden', 'spiral_arch', 'epi', 'rosette',
-           'stack_of', 'traj_array_to_complex', 'traj_complex_to_array']
+__all__ = ['min_trap_grad', 'trap_grad', 'spiral_varden', 'spiral_arch', 'epi',
+           'rosette', 'stack_of', 'traj_array_to_complex',
+           'traj_complex_to_array']
+
+
+def min_trap_grad(area, gmax, dgdt, dt):
+    r"""Minimal duration trapezoidal gradient designer.
+
+    Args:
+        area (float): pulse area in (g*sec)/cm
+        gmax (float): maximum gradient in g/cm
+        dgdt (float): max slew rate in g/cm/sec
+        dt (float): sample time in sec
+
+    """
+
+    if np.abs(area) > 0:
+        # we get the solution for plateau amp by setting derivative of
+        # duration as a function of amplitude to zero and solving
+        a = np.sqrt(dgdt * area / 2)
+
+        # finish design with discretization
+        # make a flat portion of magnitude a and enough area for the swath
+        pts = np.floor(area / a / dt)
+        flat = np.ones((1, int(pts)))
+        flat = flat / np.sum(flat) * area / dt
+        if np.max(flat) > gmax:
+            flat = np.ones((1, int(np.ceil(area / gmax / dt))))
+            flat = flat / np.sum(flat) * area / dt
+
+        # make attack and decay ramps
+        ramppts = int(np.ceil(np.max(flat) / dgdt / dt))
+        ramp_up = np.linspace(0, ramppts, num=ramppts) / ramppts * np.max(flat)
+        ramp_dn = np.linspace(ramppts, 0, num=ramppts) / ramppts * np.max(flat)
+
+        trap = np.concatenate((ramp_up, np.squeeze(flat), ramp_dn))
+
+    else:
+        # negative-area trap requested?
+        trap, ramppts = 0, 0
+
+    return np.expand_dims(trap, axis=0), ramppts
 
 
 def trap_grad(area, gmax, dgdt, dt, *args):
