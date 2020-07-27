@@ -8,7 +8,7 @@ import numba as nb
 __all__ = ['poisson', 'radial', 'spiral']
 
 
-def poisson(img_shape, accel, K=30, calib=[0, 0], dtype=np.complex,
+def poisson(img_shape, accel, K=30, calib=(0, 0), dtype=np.complex,
             crop_corner=True, return_density=False, seed=0):
     """Generate Poisson-disc sampling pattern
 
@@ -30,6 +30,9 @@ def poisson(img_shape, accel, K=30, calib=[0, 0], dtype=np.complex,
         SIGGRAPH sketches. 2007.
 
     """
+    if seed is not None:
+        rand_state = np.random.get_state()
+
     y, x = np.mgrid[:img_shape[-2], :img_shape[-1]]
     x = np.maximum(abs(x - img_shape[-1] / 2) - calib[-1] / 2, 0)
     x /= x.max()
@@ -56,6 +59,10 @@ def poisson(img_shape, accel, K=30, calib=[0, 0], dtype=np.complex,
             slope_max = slope
 
     mask = mask.reshape(img_shape).astype(dtype)
+
+    if seed is not None:
+        np.random.set_state(rand_state)
+
     if return_density:
         return mask, R
     else:
@@ -130,7 +137,7 @@ def radial(coord_shape, img_shape, golden=True, dtype=np.float):
 
 
 @nb.jit(nopython=True, cache=True)  # pragma: no cover
-def _poisson(nx, ny, K, R, calib, seed):
+def _poisson(nx, ny, K, R, calib, seed=None):
 
     mask = np.zeros((ny, nx))
     f = ny / nx

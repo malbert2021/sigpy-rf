@@ -1187,8 +1187,8 @@ class Wavelet(Linop):
         self.wave_name = wave_name
         self.axes = axes
         self.level = level
-        oshape = wavelet.get_wavelet_shape(ishape, wave_name=wave_name,
-                                           axes=axes, level=level)
+        oshape, _ = wavelet.get_wavelet_shape(ishape, wave_name=wave_name,
+                                              axes=axes, level=level)
 
         super().__init__(oshape, ishape)
 
@@ -1224,16 +1224,17 @@ class InverseWavelet(Linop):
         self.wave_name = wave_name
         self.axes = axes
         self.level = level
-        ishape = wavelet.get_wavelet_shape(oshape, wave_name=wave_name,
-                                           axes=axes, level=level)
+        ishape, self.coeff_slices = wavelet.get_wavelet_shape(
+            oshape, wave_name=wave_name,
+            axes=axes, level=level)
         super().__init__(oshape, ishape)
 
     def _apply(self, input):
         device = backend.get_device(input)
         with device:
             return wavelet.iwt(
-                input, self.oshape, wave_name=self.wave_name,
-                axes=self.axes, level=self.level)
+                input, self.oshape, self.coeff_slices,
+                wave_name=self.wave_name, axes=self.axes, level=self.level)
 
     def _adjoint_linop(self):
         return Wavelet(self.oshape, axes=self.axes,
@@ -1657,3 +1658,50 @@ class ConvolveFilterAdjoint(Linop):
         return ConvolveFilter(self.oshape, self.data,
                               mode=self.mode, strides=self.strides,
                               multi_channel=self.multi_channel)
+
+
+class Slice(Linop):
+    """Slice input with given index.
+
+    Given input `input` and index `idx`, returns `input[idx]`.
+
+    Args:
+        ishape (tuple of ints): Input shape.
+        idx (slice or tuple of slices): Index.
+
+    """
+    def __init__(self, ishape, idx):
+        self.idx = idx
+        oshape = np.empty(ishape)[idx].shape
+        super().__init__(oshape, ishape)
+
+    def _apply(self, input):
+        return input[self.idx]
+
+    def _adjoint_linop(self):
+        return Embed(self.ishape, self.idx)
+
+
+class Embed(Linop):
+    """Embed input into a zero array with the given shape and index.
+
+    Given input `input` and index `idx`,
+    returns output with `output[idx] = input`.
+
+    Args:
+        oshape (tuple of ints): output shape.
+        idx (slice or tuple of slices): Index.
+
+    """
+    def __init__(self, oshape, idx):
+        self.idx = idx
+        ishape = np.empty(oshape)[idx].shape
+        super().__init__(oshape, ishape)
+
+    def _apply(self, input):
+        output = np.zeros(self.oshape, dtype=input.dtype)
+        output[self.idx] = input
+        return output
+
+    def _adjoint_linop(self):
+        return Slice(self.oshape, self.idx)
