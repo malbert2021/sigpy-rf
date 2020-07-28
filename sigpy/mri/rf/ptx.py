@@ -116,14 +116,13 @@ def stspa(target, sens, coord, dt, roi=None, alpha=0, b0=None, tseg=None,
 
 
 def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
-         alpha=0, max_cg_iter=10, tol=1E-6):
-    """Small tip spokes and k-t points parallel transmit pulse designer. A
-        draft to be improved upon.
+         alpha=0, iter_dif=0.0001):
+    """Small tip spokes and k-t points parallel transmit pulse designer.
 
        Args:
            mask (ndarray): region in which to optimize flip angle uniformity
                in slice. [dim dim]
-           sens (ndarray): sensitivity maps. [Nc dim dim]
+           sens (ndarray): sensitivity maps. [nc dim dim]
            n_spokes (int): number of spokes to be created in the design.
            fov (float): excitation FOV (cm).
            dx_max (float): max. resolution of the trajectory (cm).
@@ -133,9 +132,8 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
            dgdtmax (float): max gradient slew (g/cm/s).
            gmax (float): max gradient amplitude (g/cm).
            alpha (float): regularization parameter.
-           max_cg_iter (int): max number of cg iterations used during RF weight
-               design for each spoke
-           tol (float): allowable error.
+           iter_dif (float): for each spoke, the difference in cost btwn.
+              successive iterations at which to terminate MLS iterations.
 
     Returns:
         2-element tuple containing
@@ -150,14 +148,14 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
            1553-62.
        """
 
-    Nc = sens.shape[0]
-    dim = sens.shape[1]
+    nc = sens.shape[0]
 
     kmax = 1 / dx_max  # /cm, max spatial freq of trajectory
     # greedy kx, ky grid
-    kxs, kys = np.meshgrid(
-        np.linspace(-kmax / 2, kmax / 2 - 1 / fov, fov * kmax),
-        np.linspace(-kmax / 2, kmax / 2 - 1 / fov, fov * kmax))
+    kxs, kys = np.meshgrid(np.linspace(-kmax / 2, kmax / 2 - 1 / fov,
+                                       fov * kmax),
+                           np.linspace(-kmax / 2, kmax / 2 - 1 / fov,
+                                       fov * kmax))
     # vectorize the grid
     kxs = kxs.flatten()
     kys = kys.flatten()
@@ -165,45 +163,48 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
     dc = np.intersect1d(np.where((kxs == 0)), np.where((kys == 0)))[0]
 
     # remove DC
-    kxs = np.concatenate([kxs[:dc], kxs[dc + 1:]])
-    kys = np.concatenate([kys[:dc], kys[dc + 1:]])
+    kxs = np.concatenate([kxs[:dc], kxs[dc+1:]])
+    kys = np.concatenate([kys[:dc], kys[dc+1:]])
 
     # step 2: design the weights
     kx, ky = np.zeros(1), np.zeros(1)
     k = np.expand_dims(np.concatenate((kx, ky)), 0)
 
     # initial target phase
-    phs = np.zeros(np.shape(mask))
+    phs = np.zeros((np.size(mask), 1))
 
     for ii in range(n_spokes):
 
         # build Afull
-        A = rf.PtxSpatialExplicit(sens, k, gts, mask.shape)
-        M = sp.linop.MatMul(A.oshape, mask)
-        A = M * A
+        Anum = rf.PtxSpatialExplicit(sens, k, gts, mask.shape, fov=fov,
+                                     ret_array=True)
 
         # design wfull using MLS
-        I = sp.linop.Identity((Nc, k.shape[0]))
-        b = A.H * np.exp(1j * phs)
-        w_full = np.zeros(A.ishape, dtype=np.complex)
-        alg_method = sp.alg.ConjugateGradient(A.H * A + alpha * I,
-                                              b, w_full, P=None,
-                                              max_iter=max_cg_iter,
-                                              tol=tol)
+        # initialize wfull
+        w_full = np.linalg.inv(Anum.T @ Anum + alpha * np.eye((ii+1)*nc)) @ \
+                 (Anum.T @ np.exp(1j*phs))
 
-        while not alg_method.done():
-            alg_method.update()
+        err = Anum @ w_full - np.exp(1j * phs)
+        cost = np.real(err.T @ err + alpha * w_full.T @ w_full)
+        cost_old = 10 * cost  # to get the loop going
+        while np.absolute(cost - cost_old) > iter_dif * cost_old:
+            cost_old = cost
+            phs = np.angle(Anum @ w_full)
+            w_full = np.linalg.pinv(
+                Anum.T @ Anum + alpha * np.eye((ii + 1) * nc)) @ (
+                                 Anum.T @ np.exp(1j * phs))
+            err = Anum @ w_full - np.exp(1j * phs)
+            cost = np.real(err.T @ err + alpha * w_full.T @ w_full)
 
         # add a spoke using greedy method
         if ii < n_spokes - 1:
 
-            r = np.exp(1j * phs) - A * w_full
+            r = np.exp(1j * phs) - Anum @ w_full
 
             rfnorm = np.zeros(kxs.shape)
             for jj in range(kxs.size):
-                Afull = rf.PtxSpatialExplicit(sens, k, gts, mask.shape)
-                rfnorm[jj] = np.linalg.norm(
-                    np.linalg.pinv((Afull.H * Afull) * (Afull.H * r)))
+                inv = np.linalg.pinv((Anum.T @ Anum) @ (Anum.T @ r))
+                rfnorm[jj] = np.linalg.norm(inv)
 
             ind = np.argmax(rfnorm)
             k_new = np.zeros((1, 2))
@@ -226,9 +227,9 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
 
     n_plat = subgz.size - 2 * nramp  # time points on trap plateau
     # interpolate to stretch out waveform to appropriate length
-    f = interp1d(np.arange(0, npts, 1) / npts, subrf, fill_value='extrapolate')
-    subrf = f(np.arange(0, n_plat, 1) / n_plat)
-    subrf = np.concatenate((np.zeros((nramp)), subrf, np.zeros((nramp))))
+    f = interp1d(np.arange(0, npts, 1)/npts, subrf, fill_value='extrapolate')
+    subrf = f(np.arange(0, n_plat, 1)/n_plat)
+    subrf = np.concatenate((np.zeros(nramp), subrf, np.zeros(nramp)))
 
     # calc gradient, add extra 0 location at end for return to (0, 0)
     gxarea = np.diff(np.concatenate((k[:, 0], np.zeros(1)))) / 4257
@@ -259,11 +260,10 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
     gz.extend(np.squeeze(gzref).tolist())
     gx.extend([0] * np.size(gzref))
     gy.extend([0] * np.size(gzref))
-
-    pulses = np.kron(w_full, subrf)
+    pulses = np.kron(np.reshape(w_full, (nc, n_spokes)), subrf)
 
     # add zeros for gzref
-    rf_ref = np.zeros((Nc, len(gzref.T)))
+    rf_ref = np.zeros((nc, len(gzref.T)))
     pulses = np.concatenate((pulses, rf_ref), 1)
 
     # combine gradient waveforms
@@ -271,4 +271,3 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
     g = np.vstack((np.array(gx), np.array(gy), np.array(gz)))
 
     return pulses, g
-
