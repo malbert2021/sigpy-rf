@@ -5,7 +5,8 @@ import sigpy as sp
 from sigpy import backend
 
 
-def PtxSpatialExplicit(sens, coord, dt, img_shape, b0=None, ret_array=False):
+def PtxSpatialExplicit(sens, coord, dt, img_shape, fov=None, b0=None,
+                       ret_array=False):
     """Explicit spatial-domain pulse design linear operator.
     Linear operator relates rf pulses to desired magnetization.
     Equivalent matrix has dimensions [Ns Nt].
@@ -15,13 +16,11 @@ def PtxSpatialExplicit(sens, coord, dt, img_shape, b0=None, ret_array=False):
         coord (None or array): coordinates. [nt 2]
         dt (float): hardware sampling dt.
         img_shape (None or tuple): image shape.
+        fov (None or float): field of view (cm). If None, fov is taken to be
+            same as img_shape (that is, 1cm/pixel).
         b0 (array): 2D array, B0 inhomogeneity map.
         ret_array (bool): if true, return explicit numpy array.
             Else return linop.
-
-    Returns:
-        SigPy linop with A.repr_string 'pTx spatial explicit', or numpy array
-        if selected with 'ret_array'
 
 
     References:
@@ -34,6 +33,9 @@ def PtxSpatialExplicit(sens, coord, dt, img_shape, b0=None, ret_array=False):
     if len(img_shape) >= 3:
         three_d = True
 
+    if fov is None:
+        fov = img_shape[0]
+
     device = backend.get_device(sens)
     xp = device.xp
     with device:
@@ -45,14 +47,14 @@ def PtxSpatialExplicit(sens, coord, dt, img_shape, b0=None, ret_array=False):
 
         # row-major order
         # x L to R, y T to B
-        x_ = xp.linspace(-img_shape[0] / 2,
-                         img_shape[0] - img_shape[0] / 2, img_shape[0])
-        y_ = xp.linspace(img_shape[1] / 2,
-                         -(img_shape[1] - img_shape[1] / 2), img_shape[1])
+        x_ = xp.linspace(-fov / 2,
+                         fov/2 - fov/img_shape[0], img_shape[0])
+        y_ = xp.linspace(-fov / 2,
+                         fov/2 - fov/img_shape[1], img_shape[1])
         if three_d:
 
-            z_ = xp.linspace(-img_shape[2] / 2,
-                             img_shape[2] - img_shape[2] / 2, img_shape[2])
+            z_ = xp.linspace(-fov / 2,
+                             fov / 2 - fov / img_shape[0], img_shape[0])
             x, y, z = xp.meshgrid(x_, y_, z_, indexing='ij')
         else:
             x, y = xp.meshgrid(x_, y_, indexing='ij')
