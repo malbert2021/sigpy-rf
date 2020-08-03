@@ -116,7 +116,7 @@ def stspa(target, sens, coord, dt, roi=None, alpha=0, b0=None, tseg=None,
 
 
 def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
-         alpha=0, iter_dif=0.0001):
+          alpha=1, iter_dif=0.01):
     """Small tip spokes and k-t points parallel transmit pulse designer.
 
        Args:
@@ -127,7 +127,7 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
            fov (float): excitation FOV (cm).
            dx_max (float): max. resolution of the trajectory (cm).
            gts (float): hardware sampling dwell time (s).
-           sl_thick (float): slice thickness (cm).
+           sl_thick (float): slice thickness (mm).
            tbw (int): time-bandwidth product.
            dgdtmax (float): max gradient slew (g/cm/s).
            gmax (float): max gradient amplitude (g/cm).
@@ -147,7 +147,6 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
            local optimization methods. Magnetic Resonance in Medicine, 68(5),
            1553-62.
        """
-
     nc = sens.shape[0]
 
     kmax = 1 / dx_max  # /cm, max spatial freq of trajectory
@@ -160,56 +159,63 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
     kxs = kxs.flatten()
     kys = kys.flatten()
 
-    dc = np.intersect1d(np.where((kxs == 0)), np.where((kys == 0)))[0]
-
     # remove DC
+    dc = np.intersect1d(np.where((kxs == 0)), np.where((kys == 0)))[0]
     kxs = np.concatenate([kxs[:dc], kxs[dc+1:]])
     kys = np.concatenate([kys[:dc], kys[dc+1:]])
 
     # step 2: design the weights
-    kx, ky = np.zeros(1), np.zeros(1)
-    k = np.expand_dims(np.concatenate((kx, ky)), 0)
+    # initial kx/ky location is DC
+    k = np.expand_dims(np.array([0, 0]), 0)
 
     # initial target phase
-    phs = np.zeros((np.size(mask), 1))
+    phs = np.zeros((np.count_nonzero(mask), 1), dtype=np.complex)
 
     for ii in range(n_spokes):
 
-        # build Afull
+        # build Afull (and take only 0 locations into matrix)
         Anum = rf.PtxSpatialExplicit(sens, k, gts, mask.shape, fov=fov,
                                      ret_array=True)
+        Anum = Anum[~(Anum == 0).all(1)]
 
-        # design wfull using MLS
+        # design wfull using MLS:
         # initialize wfull
-        w_full = np.linalg.inv(Anum.T @ Anum + alpha * np.eye((ii+1)*nc)) @ \
-                 (Anum.T @ np.exp(1j*phs))
+        sys_a = (Anum.conj().T @ Anum + alpha * np.eye((ii+1)*nc))
+        sys_b = (Anum.conj().T @ np.exp(1j*phs))
+        w_full = np.linalg.solve(sys_a, sys_b)
 
         err = Anum @ w_full - np.exp(1j * phs)
-        cost = np.real(err.T @ err + alpha * w_full.T @ w_full)
+        cost = np.real(err.conj().T @ err + alpha * w_full.conj().T @ w_full)
         cost_old = 10 * cost  # to get the loop going
         while np.absolute(cost - cost_old) > iter_dif * cost_old:
             cost_old = cost
             phs = np.angle(Anum @ w_full)
-            w_full = np.linalg.pinv(
-                Anum.T @ Anum + alpha * np.eye((ii + 1) * nc)) @ (
-                                 Anum.T @ np.exp(1j * phs))
+            w_full = np.linalg.solve(
+                (Anum.conj().T @ Anum + alpha * np.eye((ii + 1) * nc)),
+                (Anum.conj().T @ np.exp(1j * phs)))
             err = Anum @ w_full - np.exp(1j * phs)
-            cost = np.real(err.T @ err + alpha * w_full.T @ w_full)
+            cost = np.real(err.conj().T @ err +
+                           alpha * w_full.conj().T @ w_full)
 
         # add a spoke using greedy method
         if ii < n_spokes - 1:
 
             r = np.exp(1j * phs) - Anum @ w_full
-
-            rfnorm = np.zeros(kxs.shape)
+            rfnorm = np.zeros(kxs.shape, dtype=np.complex)
             for jj in range(kxs.size):
-                inv = np.linalg.pinv((Anum.T @ Anum) @ (Anum.T @ r))
-                rfnorm[jj] = np.linalg.norm(inv)
+                ks_test = np.expand_dims(np.array([kxs[jj], kys[jj]]), 0)
+                Anum = rf.PtxSpatialExplicit(sens, ks_test, gts, mask.shape,
+                                             fov=fov, ret_array=True)
+                Anum = Anum[~(Anum == 0).all(1)]
+
+                rfm = np.linalg.solve((Anum.conj().T @ Anum),
+                                      (Anum.conj().T @ r))
+                rfnorm[jj] = np.linalg.norm(rfm)
 
             ind = np.argmax(rfnorm)
-            k_new = np.zeros((1, 2))
-            k_new[0, 0] = kxs[ind]
-            k_new[0, 1] = kys[ind]
+            print('Spoke ind: {}'.format(ind))
+            k_new = np.expand_dims(np.array([kxs[ind], kys[ind]]), 0)
+
             if ii % 2 != 0:  # add to end of pulse
                 k = np.concatenate((k, k_new))
             else:  # add to beginning of pulse
