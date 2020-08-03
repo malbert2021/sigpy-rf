@@ -5,7 +5,7 @@
 import numpy as np
 
 __all__ = ['min_trap_grad', 'trap_grad', 'spiral_varden', 'spiral_arch', 'epi',
-           'rosette', 'stack_of', 'traj_array_to_complex',
+           'rosette', 'spokes_grad', 'stack_of', 'traj_array_to_complex',
            'traj_complex_to_array']
 
 
@@ -583,6 +583,70 @@ def rosette(kmax, w1, w2, dt, dur, gamp=None, gslew=None):
     t = np.linspace(0, len(g), num=len(g) + 1)  # time vector
 
     return g, k, t, s
+
+
+def spokes_grad(k, tbw, sl_thick, gmax, dgdtmax, gts):
+    r""" Spokes gradient designer. Given some chosen spoke locations k, return
+    the gradients required to move between those spoke locations.
+
+    Args:
+        k (array): spokes locations, [Nspokes, 2]
+        tbw (int): time bandwidth product.
+        sl_thick (float): slice thickness (mm).
+        gmax (float): max gradient amplitude (g/cm).
+        dgdtmax (float): max gradient slew (g/cm/s).
+        gts (float): hardware sampling dwell time (s).
+
+    Returns:
+        g (array): gz, gy, and gz waveforms [3, Nt]
+
+    References:
+           Grissom, W., Khalighi, M., Sacolick, L., Rutt, B. & Vogel, M (2012).
+           Small-tip-angle spokes pulse design using interleaved greedy and
+           local optimization methods. Magnetic Resonance in Medicine, 68(5),
+           1553-62.
+
+    """
+    n_spokes = k.shape[0]
+
+    area = tbw / (sl_thick / 10) / 4257  # thick * kwid = twb, kwid = gam*area
+    [subgz, nramp] = min_trap_grad(area, gmax, dgdtmax, gts)
+
+    # calc gradient, add extra 0 location at end for return to (0, 0)
+    gxarea = np.diff(np.concatenate((k[:, 0], np.zeros(1)))) / 4257
+    gyarea = np.diff(np.concatenate((k[:, 1], np.zeros(1)))) / 4257
+
+    gx, gy, gz = [], [], []
+    gz_sign = -1
+    for ii in range(n_spokes):
+        gz_sign *= -1
+        gz.extend(np.squeeze(gz_sign * subgz).tolist())  # alt sign of gz
+
+        gx.extend([0] * np.size(subgz))  # zeros for gz duration
+        if np.absolute(gxarea[ii]) > 0:
+            [gblip, _] = trap_grad(abs(gxarea[ii]), gmax, dgdtmax, gts)
+            gxblip = np.int(np.sign(gxarea[ii])) * gblip
+            gx = gx[:len(gx) - len(gxblip.T)]
+            gx.extend(np.squeeze(gxblip).tolist())
+
+        gy.extend([0] * np.size(subgz))
+        if np.absolute(gyarea[ii]) > 0:
+            [gblip, _] = trap_grad(abs(gyarea[ii]), gmax, dgdtmax, gts)
+            gyblip = np.int(np.sign(gyarea[ii])) * gblip
+            gy = gy[:len(gy) - len(gyblip.T)]
+            gy.extend(np.squeeze(gyblip).tolist())
+
+    [gref, _] = trap_grad(gts * np.sum(subgz) / 2, gmax, dgdtmax, gts)
+    gzref = - gref
+    gz.extend(np.squeeze(gzref).tolist())
+    gx.extend([0] * np.size(gzref))
+    gy.extend([0] * np.size(gzref))
+
+    # combine gradient waveforms
+    gx = np.array(gx)
+    g = np.vstack((np.array(gx), np.array(gy), np.array(gz)))
+
+    return g
 
 
 def stack_of(k, num, zres):

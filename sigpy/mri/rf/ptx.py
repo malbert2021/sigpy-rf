@@ -226,6 +226,12 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
             kys = np.concatenate([kys[:ind], kys[ind + 1:]])
 
     # from our spoke selections, build the whole waveforms
+
+    # first, design our gradient waveforms:
+    g = rf.spokes_grad(k, tbw, sl_thick, gmax, dgdtmax, gts)
+
+    # design our rf
+    # calculate the size of the traps in our gz waveform- will use to calc rf
     area = tbw / (sl_thick / 10) / 4257  # thick * kwid = twb, kwid = gam*area
     [subgz, nramp] = rf.min_trap_grad(area, gmax, dgdtmax, gts)
     npts = 128
@@ -233,47 +239,14 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
 
     n_plat = subgz.size - 2 * nramp  # time points on trap plateau
     # interpolate to stretch out waveform to appropriate length
-    f = interp1d(np.arange(0, npts, 1)/npts, subrf, fill_value='extrapolate')
-    subrf = f(np.arange(0, n_plat, 1)/n_plat)
+    f = interp1d(np.arange(0, npts, 1) / npts, subrf, fill_value='extrapolate')
+    subrf = f(np.arange(0, n_plat, 1) / n_plat)
     subrf = np.concatenate((np.zeros(nramp), subrf, np.zeros(nramp)))
 
-    # calc gradient, add extra 0 location at end for return to (0, 0)
-    gxarea = np.diff(np.concatenate((k[:, 0], np.zeros(1)))) / 4257
-    gyarea = np.diff(np.concatenate((k[:, 1], np.zeros(1)))) / 4257
-
-    gx, gy, gz = [], [], []
-    gz_sign = -1
-    for ii in range(n_spokes):
-        gz_sign *= -1
-        gz.extend(np.squeeze(gz_sign * subgz).tolist())  # alt sign of gz
-
-        gx.extend([0] * np.size(subgz))  # zeros for gz duration
-        if np.absolute(gxarea[ii]) > 0:
-            [gblip, _] = rf.trap_grad(abs(gxarea[ii]), gmax, dgdtmax, gts)
-            gxblip = np.int(np.sign(gxarea[ii])) * gblip
-            gx = gx[:len(gx) - len(gxblip.T)]
-            gx.extend(np.squeeze(gxblip).tolist())
-
-        gy.extend([0] * np.size(subgz))
-        if np.absolute(gyarea[ii]) > 0:
-            [gblip, _] = rf.trap_grad(abs(gyarea[ii]), gmax, dgdtmax, gts)
-            gyblip = np.int(np.sign(gyarea[ii])) * gblip
-            gy = gy[:len(gy) - len(gyblip.T)]
-            gy.extend(np.squeeze(gyblip).tolist())
-
-    [gref, _] = rf.trap_grad(gts * np.sum(subgz) / 2, gmax, dgdtmax, gts)
-    gzref = - gref
-    gz.extend(np.squeeze(gzref).tolist())
-    gx.extend([0] * np.size(gzref))
-    gy.extend([0] * np.size(gzref))
     pulses = np.kron(np.reshape(w_full, (nc, n_spokes)), subrf)
 
     # add zeros for gzref
-    rf_ref = np.zeros((nc, len(gzref.T)))
+    rf_ref = np.zeros((nc, g.shape[1] - pulses.shape[1]))
     pulses = np.concatenate((pulses, rf_ref), 1)
-
-    # combine gradient waveforms
-    gx = np.array(gx)
-    g = np.vstack((np.array(gx), np.array(gy), np.array(gz)))
 
     return pulses, g
