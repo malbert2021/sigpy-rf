@@ -172,7 +172,8 @@ def _exp(b1):
 
         return xp.array(
             [[cos_alpha, -1j * sin_alpha * cos_phi - sin_alpha * sin_phi],
-             [-1j * sin_alpha * cos_phi + sin_alpha * sin_phi, cos_alpha]])
+             [-1j * sin_alpha * cos_phi + sin_alpha * sin_phi, cos_alpha]], 
+            dtype=xp.complex128)
 
 
 def hard_pulse_rotation(input, b1):
