@@ -184,7 +184,7 @@ def bloch_siegert_fm(n=512, dur=2e-3, b1p=20., k=42.,
 
     """
 
-    t = np.arange(1, n//2) * dur / n
+    t = np.arange(1, n//2 + 1) * dur / n
 
     om = gamma * b1p / np.sqrt((1 - gamma * b1p / k * t) ** -2 - 1)
     om = np.concatenate((om, om[::-1]))
