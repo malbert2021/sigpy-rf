@@ -152,9 +152,9 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
     kmax = 1 / dx_max  # /cm, max spatial freq of trajectory
     # greedy kx, ky grid
     kxs, kys = np.meshgrid(np.linspace(-kmax / 2, kmax / 2 - 1 / fov,
-                                       fov * kmax),
+                                       np.int(fov * kmax)),
                            np.linspace(-kmax / 2, kmax / 2 - 1 / fov,
-                                       fov * kmax))
+                                       np.int(fov * kmax)))
     # vectorize the grid
     kxs = kxs.flatten()
     kys = kys.flatten()
