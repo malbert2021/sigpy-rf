@@ -7,7 +7,8 @@ import numba as nb
 from sigpy import backend, config, util
 
 
-__all__ = ['soft_thresh', 'hard_thresh', 'l1_proj', 'l2_proj']
+__all__ = ['soft_thresh', 'hard_thresh', 'l1_proj',
+           'l2_proj', 'linf_proj', 'psd_proj']
 
 
 def soft_thresh(lamda, input):
@@ -107,6 +108,44 @@ def l2_proj(eps, input, axes=None):
     output = mask * input + (1 - mask) * (eps * input / (norm + mask))
 
     return output
+
+
+def linf_proj(eps, input, bias=None):
+    """Projection onto L-infinity ball.
+
+    Args:
+        eps (float, or array): l-infinity ball scaling.
+        input (array)
+
+    Returns:
+        array: Result.
+
+    """
+    if bias is not None:
+        input = input - bias
+
+    output = input - soft_thresh(eps, input)
+
+    if bias is not None:
+        output += bias
+
+    return output
+
+
+def psd_proj(input):
+    """Projection onto postiive semi-definite matrices.
+
+    Args:
+        input (array): a two-dimensional matrix.
+
+    Returns:
+        array: Result.
+
+    """
+    xp = backend.get_array_module(input)
+    w, v = xp.linalg.eig((input + xp.conj(input).T) / 2)
+    w[w < 0] = 0
+    return (v * w) @ v.conjugate().T
 
 
 @nb.vectorize  # pragma: no cover

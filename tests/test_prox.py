@@ -58,6 +58,25 @@ class TestProx(unittest.TestCase):
         y = P(1.0, x)
         npt.assert_allclose(y, x / np.linalg.norm(x.ravel()))
 
+    def test_LInfProj(self):
+        shape = [5]
+        epsilon = 0.6
+        P = prox.LInfProj(shape, epsilon)
+        x = np.array([-1, -0.5, 0, 0.5, 1])
+        y = P(1.0, x)
+        npt.assert_allclose(y, [-0.6, -0.5, 0, 0.5, 0.6])
+
+    def test_PsdProj(self):
+        shape = [3, 3]
+        P = prox.PsdProj(shape)
+        x = np.array([[1, 0, 0],
+                      [0, -1, 0],
+                      [0, 0, -2]])
+        y = P(None, x)
+        npt.assert_allclose(y, np.array([[1, 0, 0],
+                                         [0, 0, 0],
+                                         [0, 0, 0]]))
+
     def test_BoxConstraint(self):
         shape = [5]
         P = prox.BoxConstraint(shape, -1, 1)

@@ -214,6 +214,46 @@ class L2Proj(Prox):
                 self.epsilon, input - self.y, self.axes) + self.y
 
 
+class LInfProj(Prox):
+    r"""Proximal operator for l-infinity ball projection.
+
+    .. math::
+        \min_x \frac{1}{2} \| x - y \|_2^2 + 1\{\| x \|_\infty < \epsilon\}
+
+    Args:
+        shape (tuple of ints): Input shape.
+        epsilon (float): Regularization parameter.
+        y (scalar or array): Bias term.
+
+    """
+
+    def __init__(self, shape, epsilon, bias=None, axes=None):
+        self.epsilon = epsilon
+        self.bias = bias
+        self.axes = axes
+
+        super().__init__(shape)
+
+    def _prox(self, alpha, input):
+        with backend.get_device(input):
+            return thresh.linf_proj(self.epsilon, input, bias=self.bias)
+
+
+class PsdProj(Prox):
+    r"""Proximal operator for positive semi-definite matrices.
+
+    .. math::
+        \min_x \frac{1}{2} \| X - Y \|_2^2 + 1\{\| X \succeq 0\}
+
+    Args:
+        shape (tuple of ints): Input shape.
+
+    """
+    def _prox(self, alpha, input):
+        with backend.get_device(input):
+            return thresh.psd_proj(input)
+
+
 class L1Reg(Prox):
     r"""Proximal operator for l1 regularization.
 
