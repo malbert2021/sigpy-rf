@@ -21,7 +21,7 @@ __all__ = ['dzrf', 'dzls', 'msinc', 'dzmp', 'fmp', 'dzlp',
 
 
 def dzrf(n=64, tb=4, ptype='st', ftype='ls', d1=0.01, d2=0.01,
-         cancel_alpha_phs=False):
+         cancel_alpha_phs=False, custom_profile=None):
     r"""Primary function for design of pulses using the SLR algorithm.
 
     Args:
@@ -32,21 +32,28 @@ def dzrf(n=64, tb=4, ptype='st', ftype='ls', d1=0.01, d2=0.01,
             'sat' (pi/2 saturation pulse).
         ftype (string): type of filter to use: 'ms' (sinc), 'pm'
             (Parks-McClellan equal-ripple), 'min' (minphase using factored pm),
-            'max' (maxphase using factored pm), 'ls' (least squares).
+            'max' (maxphase using factored pm), 'ls' (least squares), or 'cp'
+            (custom excitation profile).
         d1 (float): passband ripple level in :math:'M_0^{-1}'.
         d2 (float): stopband ripple level in :math:'M_0^{-1}'.
         cancel_alpha_phs (bool): For 'ex' pulses, absorb the alpha phase
             profile from beta's profile, so they cancel for a flatter
             total phase
+        custom_profile (array): if provided, pulse will be designed to excite
+            an arbitrary profile rather than a rectangular one, following [2].
 
     Returns:
         rf (array): designed RF pulse.
 
     References:
-        Pauly, J., Le Roux, Patrick., Nishimura, D., and Macovski, A.(1991).
-        Parameter Relations for the Shinnar-LeRoux Selective Excitation
+        [1] Pauly, J., Le Roux, Patrick., Nishimura, D., and Macovski, A.
+        (1991). Parameter Relations for the Shinnar-LeRoux Selective Excitation
         Pulse Design Algorithm.
         IEEE Transactions on Medical Imaging, Vol 10, No 1, 53-65.
+
+        [2] Barral, J., Pauly, J., and Nishimura, D. (2008). SLR RF Pulse
+        Design for Arbitrarily-Shaped Excitation Profiles.
+        Proc. Intl. Soc. Mag. Reson. Med. 16, 1323.
     """
 
     [bsf, d1, d2] = calc_ripples(ptype, d1, d2)
@@ -62,17 +69,25 @@ def dzrf(n=64, tb=4, ptype='st', ftype='ls', d1=0.01, d2=0.01,
         b = dzmp(n, tb, d1, d2)
     elif ftype == 'ls':  # least squares
         b = dzls(n, tb, d1, d2)
+    elif ftype == 'cp':  # custom profile, [2]
+        if custom_profile is None:
+            raise Exception('cp filter selected but custom_profile not passed')
+        b = np.sin(np.arcsin(custom_profile) / 2)
     else:
         raise Exception('Filter type ("{}") is not recognized.'.format(ftype))
 
-    if ptype == 'st':
-        rf = b
-    elif ptype == 'ex':
-        b = bsf * b
-        rf = b2rf(b, cancel_alpha_phs)
+    if ftype == 'cp':  # custom profile rf design, following [2]
+        b_hat = bsf * sp.ifft(b, center=True, norm=None)
+        rf = b2rf(b_hat, cancel_alpha_phs=True)
     else:
-        b = bsf * b
-        rf = b2rf(b)
+        if ptype == 'st':
+            rf = b
+        elif ptype == 'ex':
+            b = bsf * b
+            rf = b2rf(b, cancel_alpha_phs)
+        else:
+            b = bsf * b
+            rf = b2rf(b)
 
     return rf
 
