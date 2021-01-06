@@ -136,6 +136,10 @@ def abrm_hp(rf, gamgdt, xx, dom0dt=0, b1=None):
 
     device = backend.get_device(rf)
     xp = device.xp
+    
+    if b1 is None:
+        rf = rf.flatten()
+        
     with device:
         Ns = xx.shape[0] # Ns: # of spatial locs
         Nt = gamgdt.shape[0]  # Nt: # time points
