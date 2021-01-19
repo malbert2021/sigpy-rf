@@ -2,8 +2,88 @@
 """Optimal Control Pulse Design functions.
 """
 from sigpy import backend
+from sigpy.mri.rf import slr
+import numpy as np
 
 __all__ = ['blochsim', 'deriv']
+
+
+def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01, d2=0.01,
+              dt=4e-6, conv_tolerance=1e-5):
+    r"""
+
+    Args:
+        d1: ripple level in passband
+        d2: ripple level in stopband
+        dthick: thickness of the slice, cm
+        dt: dwell time
+        N: number of points in pulse
+        os: matrix scaling factor
+        tb: time bandwidth product, unitless
+        stepsize: step size
+        max_iters: max number of iterations
+        conv_tolerance: max change between iterations, convergence tolerance
+
+    Returns:
+        gamgdt: scaled gradient
+        pulse: pulse of interest, complex RF waveform
+
+    """
+
+    # set mag of gamgdt according to tb + dthick
+    gambar = 4257  # gamma/2/pi, Hz/g
+    gmag = tb / (N * dt) / dthick / gambar
+
+    # get spatial locations + gradient
+    x = np.arange(0, N * os, 1) / N / os - 1 / 2
+    gamgdt = 2 * np.pi * gambar * gmag * dt * np.ones(N)
+
+    # set up target beta pattern
+    d1 = np.sqrt(d1 / 2)  # Mxy -> beta ripple for ex pulse
+    d2 = d2 / np.sqrt(2)
+    dib = slr.dinf(d1, d2)
+    ftwb = dib / tb
+    fb = np.asarray([0, (1 - ftwb) * (tb / 2),
+                     (1 + ftwb) * (tb / 2), N / 2]) / N  # freq edges, normalized to 2*nyquist
+
+    dpass = np.abs(x) < fb[1]  # passband mask
+    dstop = np.abs(x) > fb[2]  # stopband mask
+    wb = [1, d1 / d2]
+    w = dpass + wb[1] / wb[0] * dstop  # 'points we care about' mask
+
+    db = np.sqrt(1 / 2) * dpass * np.exp(-1j / 2 * x * 2 * np.pi)  # target beta pattern
+
+    pulse = np.zeros(N, dtype=complex)
+
+    a = np.exp(1j / 2 * x / (gambar * dt * gmag) * np.sum(gamgdt))
+    b = np.zeros(a.shape, dtype=complex)
+
+    eb = b - db
+    cost = np.zeros(max_iters + 1)
+    cost[0] = np.real(np.sum(w * np.abs(eb) ** 2))
+
+    for ii in range(0, max_iters, 1):
+        # calculate search direction
+        auxb = w * (b - db)
+        drf = deriv(pulse, x / (gambar * dt * gmag), gamgdt, None,
+                    auxb, a, b)
+        drf = 1j * np.imag(drf)
+
+        # get test point
+        pulse -= stepsize * drf
+
+        # simulate test point
+        [a, b] = blochsim(pulse, x / (gambar * dt * gmag), gamgdt)
+
+        # calculate cost
+        eb = b - db
+        cost[ii + 1] = np.sum(w * np.abs(eb) ** 2)
+
+        # check cost with tolerance
+        if (cost[ii] - cost[ii + 1]) / cost[ii] < conv_tolerance:
+            break
+
+    return gamgdt, pulse
 
 
 def blochsim(rf, x, g):
