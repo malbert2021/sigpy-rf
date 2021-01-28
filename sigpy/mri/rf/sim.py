@@ -115,7 +115,7 @@ def abrm_hp(rf, gamgdt, xx, dom0dt=0, b1=None):
 
     Args:
         rf (array): rf pulse samples in radians.
-        gamdt (array): gradient samples in radians/(units of xx).
+        gamgdt (array): gradient samples in radians/(units of xx).
         xx (array): spatial locations.
         dom0dt (array): off-resonance phase in radians.
         b1 (array): B1 at each spatial location, for each channel in rf. 
