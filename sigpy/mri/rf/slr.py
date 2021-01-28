@@ -784,11 +784,6 @@ def dz_recursive_rf(n_seg, tb, n, se_seq=False, tb_ref=8, z_pad_fact=4,
 
 def dz_ramp_beta(n, ratio, tb, d1, d2):
     r"""Creates a sloped beta filter for designing sloped profiles
-
-    Args:
-
-    Returns:
-
     """
     ftw = dinf(d1, d2) / tb  # fractional transition width
     shift = n / 4
@@ -804,12 +799,13 @@ def dz_ramp_beta(n, ratio, tb, d1, d2):
 
     w = np.array([d1 / d2, 1, d1 / d2])  # band error weights
 
-    # design the filter
-    b = signal.firls(n - 1, f, m, w)
-
+    # design the filter, firls requires odd numtaps, so design 1 extra & trim
+    b = signal.firls(n + 1, f, m, w)
+    b = b[0:n]
     # hilbert transformation to suppress negative passband, and demod to DC
-    b = signal.hilbert(b) * np.exp(-1j * 2 * np.pi / n * shift * range(n)) / 2\
-        * np.exp(-1j * np.pi / n * shift)
+    b = signal.hilbert(b)
+    b = b * np.exp(-1j * 2 * np.pi / n * shift * np.linspace(0, n-1, n)) / 2
+    b = b * np.exp(-1j * np.pi / n * shift)
 
     # return a normalized version in order to get 1 at DC
-    return b / np.sum(b)
+    return np.expand_dims(b / np.sum(b), 0)
