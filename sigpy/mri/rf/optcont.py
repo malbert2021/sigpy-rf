@@ -10,7 +10,7 @@ __all__ = ['blochsim', 'deriv']
 
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01, d2=0.01,
               dt=4e-6, conv_tolerance=1e-5):
-    r"""
+    r"""1D slice-selective RF pulse optimal control design
 
     Args:
         d1: ripple level in passband
