@@ -5,23 +5,24 @@ from sigpy import backend
 from sigpy.mri.rf import slr
 import numpy as np
 
-__all__ = ['blochsim', 'deriv']
+__all__ = ['blochsim', 'deriv', 'optcont1d']
 
 
-def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01, d2=0.01,
-              dt=4e-6, conv_tolerance=1e-5):
-    r"""1D slice-selective RF pulse optimal control design
+
+def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
+              d2=0.01, dt=4e-6, conv_tolerance=1e-5):
+    r"""1D optimal control pulse designer
 
     Args:
-        d1: ripple level in passband
-        d2: ripple level in stopband
-        dthick: thickness of the slice, cm
-        dt: dwell time
+        dthick: thickness of the slice (cm)
         N: number of points in pulse
         os: matrix scaling factor
         tb: time bandwidth product, unitless
-        stepsize: step size
+        stepsize: optimization step size
         max_iters: max number of iterations
+        d1: ripple level in passband
+        d2: ripple level in stopband
+        dt: dwell time (s)
         conv_tolerance: max change between iterations, convergence tolerance
 
     Returns:
@@ -43,15 +44,17 @@ def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01, d2=0.0
     d2 = d2 / np.sqrt(2)
     dib = slr.dinf(d1, d2)
     ftwb = dib / tb
+    # freq edges, normalized to 2*nyquist
     fb = np.asarray([0, (1 - ftwb) * (tb / 2),
-                     (1 + ftwb) * (tb / 2), N / 2]) / N  # freq edges, normalized to 2*nyquist
+                     (1 + ftwb) * (tb / 2), N / 2]) / N
 
     dpass = np.abs(x) < fb[1]  # passband mask
     dstop = np.abs(x) > fb[2]  # stopband mask
     wb = [1, d1 / d2]
     w = dpass + wb[1] / wb[0] * dstop  # 'points we care about' mask
 
-    db = np.sqrt(1 / 2) * dpass * np.exp(-1j / 2 * x * 2 * np.pi)  # target beta pattern
+    # target beta pattern
+    db = np.sqrt(1 / 2) * dpass * np.exp(-1j / 2 * x * 2 * np.pi)
 
     pulse = np.zeros(N, dtype=complex)
 
