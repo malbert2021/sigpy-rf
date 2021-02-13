@@ -20,7 +20,13 @@ class TestOptcont(unittest.TestCase):
             [a, b] = rf.optcont.blochsim(pulse, x / (gambar * dt * gmag), gamgdt)
             Mxy = 2 * np.conj(a) * b
 
-        # TODO: should we return more variables
+            pyplot.figure()
+            pyplot.figure(np.abs(Mxy))
+            pyplot.show()
+
+        # TODO: compare with target Mxy, take integration
+
+            alpha = rf.b2a(db)
 
     def test_blochsim(self):
         print('Test not implemented')
