@@ -28,7 +28,7 @@ def satcont1d(bpulse, Nsp, sj, target):
     iter = alg.ConjugateGradient(A, sqrt(target*Nsp), weight.transpose, P=None, max_iter=1000,
                                          tol=1e-6)
 
-    while not iter.done():1
+    while not iter.done():
         iter.update()
 
     weight = iter.b
