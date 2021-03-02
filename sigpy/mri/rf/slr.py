@@ -12,7 +12,8 @@ from sigpy.mri.rf.util import dinf
 
 __all__ = ['dzrf', 'dzls', 'msinc', 'dzmp', 'fmp', 'dzlp',
            'b2rf', 'b2a', 'mag2mp', 'ab2rf', 'dz_gslider_b', 'dz_gslider_rf',
-           'root_flip', 'dz_recursive_rf', 'dz_hadamard_b', 'calc_ripples']
+           'root_flip', 'dz_recursive_rf', 'dz_hadamard_b', 'calc_ripples',
+           'dz_ramp_beta']
 
 """ Functions for SLR pulse design
     SLR algorithm simplifies the solution of the Bloch equations
@@ -779,3 +780,32 @@ def dz_recursive_rf(n_seg, tb, n, se_seq=False, tb_ref=8, z_pad_fact=4,
         return rf
     else:
         return rf, rf_ref
+
+
+def dz_ramp_beta(n, ratio, tb, d1, d2):
+    r"""Creates a sloped beta filter for designing sloped profiles
+    """
+    ftw = dinf(d1, d2) / tb  # fractional transition width
+    shift = n / 4
+
+    f = np.array([0, shift - (1 + ftw) * tb / 2, shift - (1 - ftw) * tb / 2,
+                  shift + (1 - ftw) * tb / 2, shift + (1 + ftw) * tb / 2,
+                  n / 2]) / (n / 2)  # edges, normalized to Nyquist
+
+    # left amplitude is derived from the fact that the slope we want is
+    # (ratio - 1)/tb, but we specify the amplitudes at the more closely spaced
+    # edges which are (1 - ftw) * tb apart
+    m = np.array([0, 0, (1 - ftw) * (ratio - 1) + 1, 1, 0, 0])  # amp @ edges
+
+    w = np.array([d1 / d2, 1, d1 / d2])  # band error weights
+
+    # design the filter, firls requires odd numtaps, so design 1 extra & trim
+    b = signal.firls(n + 1, f, m, w)
+    b = b[0:n]
+    # hilbert transformation to suppress negative passband, and demod to DC
+    b = signal.hilbert(b)
+    b = b * np.exp(-1j * 2 * np.pi / n * shift * np.linspace(0, n-1, n)) / 2
+    b = b * np.exp(-1j * np.pi / n * shift)
+
+    # return a normalized version in order to get 1 at DC
+    return np.expand_dims(b / np.sum(b), 0)
