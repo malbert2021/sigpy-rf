@@ -1,39 +1,11 @@
 # -*- coding: utf-8 -*-
 """Optimal Control Pulse Design functions.
 """
-from sigpy import backend, alg
+from sigpy import backend
 from sigpy.mri.rf import slr
 import numpy as np
 
 __all__ = ['blochsim', 'deriv', 'optcont1d']
-
-
-def satcont1d(bpulse, Nsp, sj, target):
-    r""" Direct Saturation Control for Magnetization Transfer Imaging at 7T by Leitao et al.
-
-    Args:
-        bpulse: base pulse
-        Nsp: number of sub pulses
-        sj: spatial profile/ sensitivity
-        target: target magnetization
-
-    Returns:
-        weight: weight of sub pulses, where row x column = Nsp x Ncoil
-    """
-    Ncoil = sj.shape[0]
-    weight = np.ones((Nsp, Ncoil))
-
-    A = sj*bpulse
-
-    iter = alg.ConjugateGradient(A, sqrt(target*Nsp), weight.transpose, P=None, max_iter=1000,
-                                         tol=1e-6)
-
-    while not iter.done():
-        iter.update()
-
-    weight = iter.b
-
-    return weight
 
 
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
