@@ -8,6 +8,7 @@ import sigpy.mri.rf.trajgrad as trajgrad
 __all__ = ['dz_shutters']
 
 
+
 def dz_shutters(n_shots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2,
                 inPlaneSimDim=None, flip=90, flyback=0, delayTolerance=0, tbw=None, gzmax=4,
                 gymax=4, gslew=20000):
