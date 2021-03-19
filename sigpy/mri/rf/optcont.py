@@ -8,6 +8,36 @@ import numpy as np
 __all__ = ['blochsim', 'deriv', 'optcont1d']
 
 
+def satcont(bpulse, Nsp, sens, target):
+    r""" Direct Saturation Control for Magnetization Transfer Imaging at 7T by Leitao et al.
+
+    Args:
+        bpulse: base pulse
+        Nsp: number of sub pulses
+        sens: sensitivity maps. [dim_coil dim_x dim_y]
+        target: target magnetization
+
+    Returns:
+        weight: weight of sub pulses [dim_sp dim_coil]
+    """
+
+    Ncoil = sens.shape[0]     # number of coils
+    weight = np.ones((Nsp, Ncoil))      # initial weight for optimization
+
+    A = np.dot(sens, weight.transpose) # weighted sj sum by coil, [dim_x dim_y dim_coil]
+    A = np.square(A)    # squared
+    A = np.sum(A,axis=3)    # 
+
+    iter = alg.ConjugateGradient(A, target, weight.transpose, P=None, max_iter=1000,
+                                         tol=1e-6)
+
+    while not iter.done():
+        iter.update()
+
+    weight = np.sqrt(iter.b)
+    return weight
+
+
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
               d2=0.01, dt=4e-6, conv_tolerance=1e-5):
     r"""1D optimal control pulse designer

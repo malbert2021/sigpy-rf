@@ -828,3 +828,80 @@ class GerchbergSaxton(Alg):
         over_iter = self.iter >= self.max_iter
         under_tol = self.residual <= self.tol
         return over_iter or under_tol
+
+class ConjugateGradient_mod_test(Alg):
+    r"""Modified Conjugate gradient method for testing
+
+    Solves for:
+
+    .. math:: (A x)^2 *C = b
+
+    where A is a Hermitian linear operator.
+
+    Args:
+        A (Linop or function): Linop or function to compute A.
+        b (array): Observation.
+        x (array): Variable.
+        P (function or None): Preconditioner.
+        max_iter (int): Maximum number of iterations.
+        tol (float): Tolerance for stopping condition.
+
+    """
+
+    def __init__(self, A, C, b, x, P=None, max_iter=100, tol=0):
+        self.A = A
+        self.C = C
+        self.b = b
+        self.P = P
+        self.x = x
+        self.tol = tol
+        self.device = backend.get_device(x)
+        with self.device:
+            xp = self.device.xp
+            self.sq = np.square(self.A(self.x))
+            self.r = b - self.sq(self.C)    #ToDO: matrix multiplication
+
+            if self.P is None:
+                z = self.r
+            else:
+                z = self.P(self.r)
+
+            if max_iter > 1:
+                self.p = z.copy()
+            else:
+                self.p = z
+
+            self.not_positive_definite = False
+            self.rzold = xp.real(xp.vdot(self.r, z))
+            self.resid = self.rzold.item()**0.5
+
+        super().__init__(max_iter)
+
+    def _update(self):
+        with self.device:
+            xp = self.device.xp
+            ApsqC = np.square(self.A(self.p))(self.C)
+            pAp = xp.real(xp.vdot(self.p, ApsqC)).item()
+            if pAp <= 0:
+                self.not_positive_definite = True
+                return
+
+            self.alpha = self.rzold / pAp
+            util.axpy(self.x, self.alpha, self.p)
+            if self.iter < self.max_iter - 1:
+                util.axpy(self.r, -self.alpha, Ap)
+                if self.P is not None:
+                    z = self.P(self.r)
+                else:
+                    z = self.r
+
+                rznew = xp.real(xp.vdot(self.r, z))
+                beta = rznew / self.rzold
+                util.xpay(self.p, beta, z)
+                self.rzold = rznew
+
+            self.resid = self.rzold.item()**0.5
+
+    def _done(self):
+        return (self.iter >= self.max_iter or
+                self.not_positive_definite or self.resid <= self.tol)
