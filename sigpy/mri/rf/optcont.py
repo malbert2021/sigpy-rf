@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Optimal Control Pulse Design functions.
 """
-from sigpy import backend, alg
+from sigpy import backend
 from sigpy.mri.rf import slr
 import numpy as np
 

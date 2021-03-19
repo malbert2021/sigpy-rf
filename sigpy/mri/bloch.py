@@ -170,9 +170,12 @@ def _exp(b1):
         cos_phi = xp.cos(phi)
         sin_phi = xp.sin(phi)
 
-        return xp.array(
-            [[cos_alpha, -1j * sin_alpha * cos_phi - sin_alpha * sin_phi],
-             [-1j * sin_alpha * cos_phi + sin_alpha * sin_phi, cos_alpha]])
+        R = xp.zeros((2, 2), dtype=xp.complex)
+        R[0, 0] = cos_alpha
+        R[0, 1] = -1j * sin_alpha * cos_phi - sin_alpha * sin_phi
+        R[1, 0] = -1j * sin_alpha * cos_phi + sin_alpha * sin_phi
+        R[1, 1] = cos_alpha
+        return R
 
 
 def hard_pulse_rotation(input, b1):
