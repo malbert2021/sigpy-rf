@@ -3,7 +3,7 @@ import numpy as np
 import sigpy as sp
 import sigpy.mri.rf as rf
 
-from sigpy.mri.rf import epi
+from sigpy.mri.rf import ep
 
 if __name__ == '__main__':
     unittest.main()
@@ -11,4 +11,4 @@ if __name__ == '__main__':
 class TestEpi(unittest.TestCase):
 
     def test_dz_shutters(self):
-        epi.dz_shutters(4)
+        ep.dz_shutters(4)
