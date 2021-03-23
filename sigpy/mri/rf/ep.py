@@ -4,6 +4,7 @@
 """
 import numpy as np
 import sigpy.mri.rf.trajgrad as trajgrad
+import sigpy.mri.rf.slr as slr
 
 __all__ = ['dz_shutters']
 
@@ -25,6 +26,7 @@ def dz_shutters(n_shots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=
 
     # design trapezoidal gradient
     [gpos, ramppts] = trajgrad.min_trap_grad(gz_area * (1 + delayTolerance), gzmax, gslew, dt)
+    #TODO: difference in final gpos
 
     # plateau sums to desired area remove last point since it is zero and will give two
     # consecutive zeros in total waveform
@@ -37,3 +39,19 @@ def dz_shutters(n_shots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=
         nFlyback = gzFlyback.size
 
     Ntz = gpos.size
+
+    # design slice-selective subpulse
+    rfSl = np.real(slr.dzrf(np.rint((Ntz - 2 * ramppts + 1) / (1 + delayTolerance)).astype(int)
+                            - nFlyback, tbw[0], 'st', 'ls', 0.01, 0.01))  # arb units
+    # zero pad rf back to length of plateau if delayTolerance > 0
+    if delayTolerance > 0:
+        nPad = np.floor(((Ntz - 2 * ramppts + 1) - rfSl.size) / 2)
+        rfSl = np.append(np.zeros((1, nPad)), rfSl, np.zeros((1, nPad)), 1)
+        if rfSl.size < Ntz - 2 * ramppts + 1:
+            rfSl = np.append(rfSl, 0)
+
+    # normalize to one radian flip
+    rfSl = rfSl / np.sum(rfSl)
+    #TODO: small difference in value but generally the same shape
+
+
