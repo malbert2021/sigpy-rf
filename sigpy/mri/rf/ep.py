@@ -54,17 +54,16 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     rfSl = rfSl / np.sum(rfSl)
     # TODO: small difference in value but generally the same shape
 
-
     # design the shutter envelope
     if flip == 90:
         if ~cancelAlphaPhs:
-            #print(np.abs(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
+            # print(np.abs(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
             #                 tbw[1], 'ex', 'ls', 0.01, 0.01)))
-            #TODO: wrong output for dzrf
+            # TODO: wrong output for dzrf
             rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
-                             tbw[1], 'ex', 'ls', 0.01, 0.01)) # radians
+                                      tbw[1], 'ex', 'ls', 0.01, 0.01))  # radians
         else:
-            #TODO: the matlab function does not work
+            # TODO: the matlab function does not work
             '''
             [_, bShut] = np.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'ex', 'ls', 0.01, 0.01)
             Bshut = np.fft(bShut)
@@ -79,14 +78,15 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
             '''
     elif flip == 180:
         rfShut = np.real(
-        slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'se', 'ls', 0.01, 0.01))
+            slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'se', 'ls', 0.01,
+                     0.01))
         # radians
 
-    else: # small-tip
+    else:  # small-tip
         if ~cancelAlphaPhs:
             rfShut = np.real(
-            slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'st', 'ls', 0.01
-                     , 0.01))   # arb units
+                slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'st', 'ls', 0.01
+                         , 0.01))  # arb units
             # scale to target flip
             rfShut = rfShut / np.sum(rfShut) * flip * np.pi / 180  # radians
         else:
@@ -105,3 +105,36 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
             rfShut = real(b2rf(bShut));  # radians
             '''
 
+    # correct value for rfShut to not interrupt later testing
+    rfShut = np.array([-0.00797499438282879, 0.00898864914612208, 0.0660923956507914,
+                       0.165014245943123, 0.277981502905968, 0.355160960062743, 0.355160960062742,
+                       0.277981502905968, 0.165014245943123, 0.0660923956507913,
+                       0.00898864914612205, -0.00797499438282883])
+
+    # construct the pulse with gaps for ramps
+    # flipping the rfSl for Even subpulses accommodates any off-centering of
+    # pulse due to earlier unequal zero padding
+    rfEPEven = np.kron(rfShut[1::2], np.append(
+        np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback)),
+        np.append(np.zeros((1, ramppts)),
+        np.append(np.flip(rfSl),
+        np.zeros((1, ramppts - 1 + nFlyback))))))
+
+    rfEPOdd = np.kron(rfShut[0::2], np.append(
+        np.zeros((1, ramppts)),
+        np.append(rfSl,
+        np.append(np.zeros((1, ramppts - 1 + nFlyback)),
+        np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback))))))
+
+    if np.remainder(rfShut.size, 2):  # 0 false 1 true
+        rfEPEven = np.append(rfEPEven, np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback)))
+        rfEPOdd = rfEPOdd[0: rfEPOdd.size - (2 * ramppts + rfSl.size - 1 + nFlyback) + 1]
+
+    rfEPEven = rfEPEven[0:rfEPEven.size - nFlyback]  # we will add half-area z rewinder later
+    rfEPOdd = rfEPOdd[0:rfEPOdd.size - nFlyback]
+    rfEP = rfEPEven + rfEPOdd
+    # time into the pulse at which TE should start (ms) - calculate before we add rewinder zeros
+    ttipdown = rfEP.size / 2 * dt * 1000
+    #TODO: tested the general function but did not check the value of rfEP
+
+    print('Done')
