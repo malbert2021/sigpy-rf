@@ -27,7 +27,6 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
 
     # design trapezoidal gradient
     [gpos, ramppts] = trajgrad.min_trap_grad(gz_area * (1 + delayTolerance), gzmax, gslew, dt)
-    # TODO: difference in final gpos area
 
     # plateau sums to desired area remove last point since it is zero and will give two
     # consecutive zeros in total waveform
@@ -55,35 +54,43 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     rfSl = rfSl / np.sum(rfSl)
     # TODO: small difference in value but generally the same shape
 
-'''
+
     # design the shutter envelope
     if flip == 90:
         if ~cancelAlphaPhs:
-            rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1])).astype(int),
-                             tbw[1], 'ex', 'ls', 0.01, 0.01) # radians
+            #print(np.abs(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
+            #                 tbw[1], 'ex', 'ls', 0.01, 0.01)))
+            #TODO: wrong output for dzrf
+            rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
+                             tbw[1], 'ex', 'ls', 0.01, 0.01)) # radians
         else:
+            #TODO: the matlab function does not work
+            '''
             [_, bShut] = np.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'ex', 'ls', 0.01, 0.01)
-            Bshut = ft(bShut)   #TODO: what is this
-            Bshut = Bshut * np.exp(-1j * 2 * np.pi / np.round(kw[1] * Nshots * dthick[1]) * 1 *
-                                   (-(np.round(kw[1] * Nshots * dthick[1])) / 2:round(kw[1] *
-                                   Nshots * dthick(
-                2)) / 2 - 1))
+            Bshut = np.fft(bShut)
+            Bshut = Bshut * np.exp(-1j * 2 * np.pi / np.rint(kw[1] * Nshots * dthick[1]) * 1 *
+                                   (-(np.rint(kw[1] * Nshots * dthick[1])) / 2:np.rint(kw[1] *
+                                   Nshots * dthick(2)) / 2 - 1))
             bShut = ift(Bshut);
             aShut = b2a(bShut);
             bShut = ifft(fft(bShut). * exp(1
             i * angle(fft(aShut))));
             rfShut = real(b2rf(bShut));
+            '''
     elif flip == 180:
-    rfShut = real(
-        dzrf(round(kw(2) * Nshots * dthick(2)), tbw(2), 'se', 'ls', 0.01, 0.01));  # radians
+        rfShut = np.real(
+        slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'se', 'ls', 0.01, 0.01))
+        # radians
 
-    else  # small-tip
-        if ~cancelAlphaPhs
-            rfShut = real(
-            dzrf(round(kw(2) * Nshots * dthick(2)), tbw(2), 'st', 'ls', 0.01, 0.01));  # arb units
+    else: # small-tip
+        if ~cancelAlphaPhs:
+            rfShut = np.real(
+            slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'st', 'ls', 0.01
+                     , 0.01))   # arb units
             # scale to target flip
-            rfShut = rfShut. / sum(rfShut) * flip * pi / 180;  # radians
-        else
+            rfShut = rfShut / np.sum(rfShut) * flip * np.pi / 180  # radians
+        else:
+            '''
             bShut = dzrf(round(kw(2) * Nshots * dthick(2)), tbw(2), 'st', 'ls', 0.01, 0.01);  # arb units
             Bshut = ft(bShut);
             Bshut = Bshut. * exp(-1
@@ -96,4 +103,5 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
             bShut = ifft(fft(bShut). * exp(1
             i * angle(fft(aShut))));
             rfShut = real(b2rf(bShut));  # radians
-'''
+            '''
+
