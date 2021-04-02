@@ -117,14 +117,14 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     rfEPEven = np.kron(rfShut[1::2], np.append(
         np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback)),
         np.append(np.zeros((1, ramppts)),
-        np.append(np.flip(rfSl),
-        np.zeros((1, ramppts - 1 + nFlyback))))))
+                  np.append(np.flip(rfSl),
+                            np.zeros((1, ramppts - 1 + nFlyback))))))
 
     rfEPOdd = np.kron(rfShut[0::2], np.append(
         np.zeros((1, ramppts)),
         np.append(rfSl,
-        np.append(np.zeros((1, ramppts - 1 + nFlyback)),
-        np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback))))))
+                  np.append(np.zeros((1, ramppts - 1 + nFlyback)),
+                            np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback))))))
 
     if np.remainder(rfShut.size, 2):  # 0 false 1 true
         rfEPEven = np.append(rfEPEven, np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback)))
@@ -135,6 +135,15 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     rfEP = rfEPEven + rfEPOdd
     # time into the pulse at which TE should start (ms) - calculate before we add rewinder zeros
     ttipdown = rfEP.size / 2 * dt * 1000
-    #TODO: tested the general function but did not check the value of rfEP
+    # TODO: tested the general function but did not check the value of rfEP
+
+    # build total gz gradient waveform
+    if ~flyback:
+        gzEP = np.kron(np.ones((1, np.floor(rfShut.size / 2).astype(int))), np.append(gpos, -gpos))
+        if np.remainder(rfShut.size, 2):
+            gzEP = np.append(gzEP, gpos)
+    else:
+        gzEP = np.tile(gpos, (1, rfShut.size))
+        gzEP = gzEP[0:gzEP.size - nFlyback]  # last rewinder will be half area
 
     print('Done')
