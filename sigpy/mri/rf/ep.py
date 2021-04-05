@@ -130,7 +130,7 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
         rfEPEven = np.append(rfEPEven, np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback)))
         rfEPOdd = rfEPOdd[0: rfEPOdd.size - (2 * ramppts + rfSl.size - 1 + nFlyback) + 1]
 
-    rfEPEven = rfEPEven[0:rfEPEven.size - nFlyback]  # we will add half-area z rewinder later
+    rfEPEven = rfEPEven[0:rfEPEven.size -nFlyback]  # we will add half-area z rewinder later
     rfEPOdd = rfEPOdd[0:rfEPOdd.size - nFlyback]
     rfEP = rfEPEven + rfEPOdd
     # time into the pulse at which TE should start (ms) - calculate before we add rewinder zeros
@@ -167,19 +167,28 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     gyEP = np.append(gyEP, np.zeros((1, (gzEP.size - gyEP.size))))
 
     # calculate and add rewinders
-    [gzRew, _] = trajgrad.trap_grad(np.sum(gpos[0:gpos.size - nFlyback]) * dt / 2, gzmax, gslew, dt)
+    [gzRew, _] = trajgrad.trap_grad(np.sum(gpos[0: - nFlyback]) * dt / 2, gzmax, gslew, dt)
     if ~flyback:
         gzEP = np.append(gzEP, ((-1) ^ np.remainder(rfShut.size, 2)) * gzRew)
     else:
-        gzEP = np.append(gzEP, - 1 * gzRew)
+        gzEP = np.append(gzEP, np.negative(gzRew))
     [gyRew, _] = trajgrad.trap_grad(np.sum(gyBlip) * dt * (rfShut.size - 1) / 2, gymax, gslew, dt)
-    gyRew = -gyRew
-    gyEP = np.append(gyEP, gyRew)
+    gyEP = np.append(gyEP, np.negative(gyRew))
 
     # zero pad waveforms to same length
     gzEP = np.append(gzEP, np.zeros((1, np.maximum(gzEP.size, gyEP.size) - gzEP.size)))
     gyEP = np.append(gyEP, np.zeros((1, np.maximum(gzEP.size, gyEP.size) - gyEP.size)))
     gEP = np.column_stack((gyEP, gzEP))  # stick them together into matrix
     rfEP = np.transpose(np.append(rfEP, np.zeros(((gyEP.size - rfEP.size), 1))))
+
+    # calculate FM waveform for slice-shifting
+    if ~flyback:
+        rfFM = np.tile(np.append(np.ones((Ntz, 1)), np.negative(np.ones((Ntz, 1)))),
+                       (np.floor(rfShut.size / 2).astype(int), 1))
+        if np.remainder(rfShut.size, 2):
+            rfFM = np.append(rfFM, np.ones((Ntz, 1)))
+        rfFM = np.append(rfFM, np.zeros((rfEP.size - rfFM.size, 1)))
+    else:
+        rfFM = np.ones(rfEP.shape)
 
     print('Done')
