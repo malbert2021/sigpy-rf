@@ -167,13 +167,19 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     gyEP = np.append(gyEP, np.zeros((1, (gzEP.size - gyEP.size))))
 
     # calculate and add rewinders
-    [gzRew, _] = trajgrad.trap_grad(sum(gpos[1:gpos.size - nFlyback]) * dt / 2, gzmax, gslew, dt)
+    [gzRew, _] = trajgrad.trap_grad(np.sum(gpos[0:gpos.size - nFlyback]) * dt / 2, gzmax, gslew, dt)
     if ~flyback:
-        gzEP = np.append(gzEP, (-1) ^ np.remainder(rfShut.size, 2) * gzRew)
+        gzEP = np.append(gzEP, ((-1) ^ np.remainder(rfShut.size, 2)) * gzRew)
     else:
         gzEP = np.append(gzEP, - 1 * gzRew)
-    [gyRew,_]=trajgrad.trap_grad(np.sum(gyBlip) * dt * (rfShut.size - 1) / 2, gymax, gslew, dt)
+    [gyRew, _] = trajgrad.trap_grad(np.sum(gyBlip) * dt * (rfShut.size - 1) / 2, gymax, gslew, dt)
     gyRew = -gyRew
     gyEP = np.append(gyEP, gyRew)
+
+    # zero pad waveforms to same length
+    gzEP = np.append(gzEP, np.zeros((1, np.maximum(gzEP.size, gyEP.size) - gzEP.size)))
+    gyEP = np.append(gyEP, np.zeros((1, np.maximum(gzEP.size, gyEP.size) - gyEP.size)))
+    gEP = np.column_stack((gyEP, gzEP))  # stick them together into matrix
+    rfEP = np.transpose(np.append(rfEP, np.zeros(((gyEP.size - rfEP.size), 1))))
 
     print('Done')
