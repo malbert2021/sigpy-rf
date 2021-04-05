@@ -58,7 +58,7 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     if flip == 90:
         if ~cancelAlphaPhs:
             print(np.abs(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
-                             tbw[1], 'ex', 'ls', 0.01, 0.01)))
+                                  tbw[1], 'ex', 'ls', 0.01, 0.01)))
             # TODO: wrong output for dzrf
             rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
                                       tbw[1], 'ex', 'ls', 0.01, 0.01))  # radians
@@ -160,10 +160,20 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     else:
         # center gy blips on gz rewinders
         gyBlipPad = np.append(np.zeros((1, Ntz - nFlyback + np.floor((nFlyback - gyBlip.size) /
-                                                                    2)).astype(int)), gyBlip)
+                                                                     2)).astype(int)), gyBlip)
         gyBlipPad = np.append(gyBlipPad, np.zeros((1, Ntz - gyBlipPad.size)))
         gyEP = np.kron(np.ones((1, rfShut.size - 1)), gyBlipPad)
 
-    gyEP = np.append(gyEP,np.zeros((1, (gzEP.size - gyEP.size))))
+    gyEP = np.append(gyEP, np.zeros((1, (gzEP.size - gyEP.size))))
+
+    # calculate and add rewinders
+    [gzRew, _] = trajgrad.trap_grad(sum(gpos[1:gpos.size - nFlyback]) * dt / 2, gzmax, gslew, dt)
+    if ~flyback:
+        gzEP = np.append(gzEP, (-1) ^ np.remainder(rfShut.size, 2) * gzRew)
+    else:
+        gzEP = np.append(gzEP, - 1 * gzRew)
+    [gyRew,_]=trajgrad.trap_grad(np.sum(gyBlip) * dt * (rfShut.size - 1) / 2, gymax, gslew, dt)
+    gyRew = -gyRew
+    gyEP = np.append(gyEP, gyRew)
 
     print('Done')
