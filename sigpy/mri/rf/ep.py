@@ -57,8 +57,8 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     # design the shutter envelope
     if flip == 90:
         if ~cancelAlphaPhs:
-            # print(np.abs(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
-            #                 tbw[1], 'ex', 'ls', 0.01, 0.01)))
+            print(np.abs(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
+                             tbw[1], 'ex', 'ls', 0.01, 0.01)))
             # TODO: wrong output for dzrf
             rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
                                       tbw[1], 'ex', 'ls', 0.01, 0.01))  # radians
@@ -136,6 +136,7 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     # time into the pulse at which TE should start (ms) - calculate before we add rewinder zeros
     ttipdown = rfEP.size / 2 * dt * 1000
     # TODO: tested the general function but did not check the value of rfEP
+    # pl.LinePlot(rfEP)
 
     # build total gz gradient waveform
     if ~flyback:
@@ -145,5 +146,24 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     else:
         gzEP = np.tile(gpos, (1, rfShut.size))
         gzEP = gzEP[0:gzEP.size - nFlyback]  # last rewinder will be half area
+
+    # get the gy blips
+    [gyBlip, _] = trajgrad.trap_grad(1 / (Nshots * dthick[1]) / 4257, gymax, gslew, dt)
+    if np.remainder(gyBlip.size, 2):
+        gyBlip = np.append(gyBlip, np.zeros((1, 1)))  # add a zero to make it even length
+    if ~flyback:
+        # center gy blips between gz trapezoids
+        # append zeros so that they straddle consecutive gz traps
+        gyBlipPad = np.append(np.zeros((1, Ntz - gyBlip.size)), gyBlip)
+        gyEP = np.append(np.zeros((1, np.floor(gyBlip.size / 2).astype(int))),
+                         np.kron(np.ones((1, rfShut.size - 1)), gyBlipPad))
+    else:
+        # center gy blips on gz rewinders
+        gyBlipPad = np.append(np.zeros((1, Ntz - nFlyback + np.floor((nFlyback - gyBlip.size) /
+                                                                    2)).astype(int)), gyBlip)
+        gyBlipPad = np.append(gyBlipPad, np.zeros((1, Ntz - gyBlipPad.size)))
+        gyEP = np.kron(np.ones((1, rfShut.size - 1)), gyBlipPad)
+
+    gyEP = np.append(gyEP,np.zeros((1, (gzEP.size - gyEP.size))))
 
     print('Done')
