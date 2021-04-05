@@ -53,14 +53,10 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
 
     # normalize to one radian flip
     rfSl = rfSl / np.sum(rfSl)
-    # TODO: small difference in value but generally the same shape
 
     # design the shutter envelope
     if flip == 90:
         if ~cancelAlphaPhs:
-            print(np.abs(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
-                                  tbw[1], 'ex', 'ls', 0.01, 0.01)))
-            # TODO: wrong output for dzrf
             rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
                                       tbw[1], 'ex', 'ls', 0.01, 0.01))  # radians
         else:
@@ -106,11 +102,13 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
             rfShut = real(b2rf(bShut));  # radians
             '''
 
+    '''
     # correct value for rfShut to not interrupt later testing
     rfShut = np.array([-0.00797499438282879, 0.00898864914612208, 0.0660923956507914,
                        0.165014245943123, 0.277981502905968, 0.355160960062743, 0.355160960062742,
                        0.277981502905968, 0.165014245943123, 0.0660923956507913,
                        0.00898864914612205, -0.00797499438282883])
+    '''
 
     # construct the pulse with gaps for ramps
     # flipping the rfSl for Even subpulses accommodates any off-centering of
@@ -195,12 +193,10 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
 
     # calculate the phases to shift the slab to the other locations
     phsMtx = np.angle(np.exp(1j * 2 * np.pi * np.matmul(np.transpose(np.array([
-        np.linspace(0, Nshots + extraShotsForOverlap - 1, Nshots + extraShotsForOverlap) /
+        np.arange(0, Nshots + extraShotsForOverlap) /
         (Nshots + extraShotsForOverlap)])),
-        np.array([np.linspace(0, rfShut.size - 1, rfShut.size)]))))
+        np.array([np.arange(0, rfShut.size)]))))
     rfPhs = np.kron(phsMtx, np.ones((1, Ntz)))
-    rfPhs = rfPhs[:, 0:rfPhs.size-nFlyback]
+    rfPhs = rfPhs[:, 0:rfPhs.size - nFlyback]
     rfPhs = np.append(rfPhs, np.zeros((Nshots + extraShotsForOverlap, rfEP.size - rfPhs.shape[
-        1])),1)
-
-    print('Done')
+        1])), 1)
