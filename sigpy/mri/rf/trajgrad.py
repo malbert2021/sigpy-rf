@@ -9,12 +9,9 @@ import numba as nb
 import math
 
 
-__all__ = ['trap_grad', 'spiral_varden', 'spiral_arch', 'epi', 'rosette',
-           'stack_of', 'traj_array_to_complex', 'traj_complex_to_array',
-           'min_time_gradient']
 __all__ = ['min_trap_grad', 'trap_grad', 'spiral_varden', 'spiral_arch', 'epi',
-           'rosette', 'spokes_grad', 'stack_of', 'traj_array_to_complex',
-           'traj_complex_to_array']
+           'rosette', 'stack_of', 'traj_array_to_complex',
+           'traj_complex_to_array', 'min_time_gradient']
 
 
 def min_trap_grad(area, gmax, dgdt, dt):
