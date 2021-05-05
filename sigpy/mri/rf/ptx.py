@@ -251,31 +251,3 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
 
     return pulses, g
 
-
-def dsatcont(bpulse, Nsp, sj, target):
-    r""" Draft designer Direct Saturation Control for Magnetization Transfer
-     Imaging at 7T by Leitao et al.
-
-    Args:
-        bpulse: base pulse
-        Nsp: number of sub pulses
-        sj: spatial profile/ sensitivity
-        target: target magnetization
-
-    Returns:
-        weight: weight of sub pulses, where row x column = Nsp x Ncoil
-    """
-    Ncoil = sj.shape[0]
-    weight = np.ones((Nsp, Ncoil))
-
-    A = sj*bpulse
-
-    iter = sp.alg.ConjugateGradient(A, np.sqrt(target*Nsp), weight.transpose,
-                                    P=None, max_iter=1000, tol=1e-6)
-
-    while not iter.done():
-        iter.update()
-
-    weight = iter.b
-
-    raise NotImplementedError
