@@ -223,18 +223,4 @@ class TestAlg(unittest.TestCase):
 
         npt.assert_allclose(np.squeeze(abs(alg_method.x)), x_numpy)
 
-    def test_cg_mod_test(self):
-        A = np.array([[1, 1, 1], [1, 1, 1]])
-        A = sp.linop.MatMul((coord.shape[0] * nc, 1), A)
 
-        C = np.array([[1],[1]])
-        target = np.array([2, 3, 4])
-        ini = np.array([1, 1, 1])
-
-        iter = alg.ConjugateGradient_mod_test(A, C, target, ini, P=None, max_iter=1000,
-                                     tol=1e-6)
-
-        while not iter.done():
-            iter.update()
-
-        opt = iter.x
