@@ -6,6 +6,7 @@ import numpy as np
 import sigpy.mri.rf.trajgrad as trajgrad
 import sigpy.mri.rf.slr as slr
 import sigpy.plot as pl
+import matplotlib.pyplot as pyplot
 
 __all__ = ['dz_shutters']
 
@@ -27,7 +28,6 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
 
     # design trapezoidal gradient
     [gpos, ramppts] = trajgrad.min_trap_grad(gz_area * (1 + delayTolerance), gzmax, gslew, dt)
-    # TODO: difference in final gpos area
 
     # plateau sums to desired area remove last point since it is zero and will give two
     # consecutive zeros in total waveform
@@ -53,37 +53,41 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
 
     # normalize to one radian flip
     rfSl = rfSl / np.sum(rfSl)
-    # TODO: small difference in value but generally the same shape
 
-'''
     # design the shutter envelope
     if flip == 90:
         if ~cancelAlphaPhs:
-            rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1])).astype(int),
-                             tbw[1], 'ex', 'ls', 0.01, 0.01) # radians
+            rfShut = np.real(slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int),
+                                      tbw[1], 'ex', 'ls', 0.01, 0.01))  # radians
         else:
+            # TODO: the matlab function does not work
+            '''
             [_, bShut] = np.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'ex', 'ls', 0.01, 0.01)
-            Bshut = ft(bShut)   #TODO: what is this
-            Bshut = Bshut * np.exp(-1j * 2 * np.pi / np.round(kw[1] * Nshots * dthick[1]) * 1 *
-                                   (-(np.round(kw[1] * Nshots * dthick[1])) / 2:round(kw[1] *
-                                   Nshots * dthick(
-                2)) / 2 - 1))
+            Bshut = np.fft(bShut)
+            Bshut = Bshut * np.exp(-1j * 2 * np.pi / np.rint(kw[1] * Nshots * dthick[1]) * 1 *
+                                   (-(np.rint(kw[1] * Nshots * dthick[1])) / 2:np.rint(kw[1] *
+                                   Nshots * dthick(2)) / 2 - 1))
             bShut = ift(Bshut);
             aShut = b2a(bShut);
             bShut = ifft(fft(bShut). * exp(1
             i * angle(fft(aShut))));
             rfShut = real(b2rf(bShut));
+            '''
     elif flip == 180:
-    rfShut = real(
-        dzrf(round(kw(2) * Nshots * dthick(2)), tbw(2), 'se', 'ls', 0.01, 0.01));  # radians
+        rfShut = np.real(
+            slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'se', 'ls', 0.01,
+                     0.01))
+        # radians
 
-    else  # small-tip
-        if ~cancelAlphaPhs
-            rfShut = real(
-            dzrf(round(kw(2) * Nshots * dthick(2)), tbw(2), 'st', 'ls', 0.01, 0.01));  # arb units
+    else:  # small-tip
+        if ~cancelAlphaPhs:
+            rfShut = np.real(
+                slr.dzrf(np.rint(kw[1] * Nshots * dthick[1]).astype(int), tbw[1], 'st', 'ls', 0.01
+                         , 0.01))  # arb units
             # scale to target flip
-            rfShut = rfShut. / sum(rfShut) * flip * pi / 180;  # radians
-        else
+            rfShut = rfShut / np.sum(rfShut) * flip * np.pi / 180  # radians
+        else:
+            '''
             bShut = dzrf(round(kw(2) * Nshots * dthick(2)), tbw(2), 'st', 'ls', 0.01, 0.01);  # arb units
             Bshut = ft(bShut);
             Bshut = Bshut. * exp(-1
@@ -96,4 +100,103 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
             bShut = ifft(fft(bShut). * exp(1
             i * angle(fft(aShut))));
             rfShut = real(b2rf(bShut));  # radians
-'''
+            '''
+
+    '''
+    # correct value for rfShut to not interrupt later testing
+    rfShut = np.array([-0.00797499438282879, 0.00898864914612208, 0.0660923956507914,
+                       0.165014245943123, 0.277981502905968, 0.355160960062743, 0.355160960062742,
+                       0.277981502905968, 0.165014245943123, 0.0660923956507913,
+                       0.00898864914612205, -0.00797499438282883])
+    '''
+
+    # construct the pulse with gaps for ramps
+    # flipping the rfSl for Even subpulses accommodates any off-centering of
+    # pulse due to earlier unequal zero padding
+    rfEPEven = np.kron(rfShut[1::2], np.append(
+        np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback)),
+        np.append(np.zeros((1, ramppts)),
+                  np.append(np.flip(rfSl),
+                            np.zeros((1, ramppts - 1 + nFlyback))))))
+
+    rfEPOdd = np.kron(rfShut[0::2], np.append(
+        np.zeros((1, ramppts)),
+        np.append(rfSl,
+                  np.append(np.zeros((1, ramppts - 1 + nFlyback)),
+                            np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback))))))
+
+    if np.remainder(rfShut.size, 2):  # 0 false 1 true
+        rfEPEven = np.append(rfEPEven, np.zeros((1, 2 * ramppts + rfSl.size - 1 + nFlyback)))
+        rfEPOdd = rfEPOdd[0: rfEPOdd.size - (2 * ramppts + rfSl.size - 1 + nFlyback) + 1]
+
+    rfEPEven = rfEPEven[0:rfEPEven.size - nFlyback]  # we will add half-area z rewinder later
+    rfEPOdd = rfEPOdd[0:rfEPOdd.size - nFlyback]
+    rfEP = rfEPEven + rfEPOdd
+    # time into the pulse at which TE should start (ms) - calculate before we add rewinder zeros
+    ttipdown = rfEP.size / 2 * dt * 1000
+    # TODO: tested the general function but did not check the value of rfEP
+    # pl.LinePlot(rfEP)
+
+    # build total gz gradient waveform
+    if ~flyback:
+        gzEP = np.kron(np.ones((1, np.floor(rfShut.size / 2).astype(int))), np.append(gpos, -gpos))
+        if np.remainder(rfShut.size, 2):
+            gzEP = np.append(gzEP, gpos)
+    else:
+        gzEP = np.tile(gpos, (1, rfShut.size))
+        gzEP = gzEP[0:gzEP.size - nFlyback]  # last rewinder will be half area
+
+    # get the gy blips
+    [gyBlip, _] = trajgrad.trap_grad(1 / (Nshots * dthick[1]) / 4257, gymax, gslew, dt)
+    if np.remainder(gyBlip.size, 2):
+        gyBlip = np.append(gyBlip, np.zeros((1, 1)))  # add a zero to make it even length
+
+    if ~flyback:
+        # center gy blips between gz trapezoids
+        # append zeros so that they straddle consecutive gz traps
+        gyBlipPad = np.append(np.zeros((1, Ntz - gyBlip.size)), gyBlip)
+        gyEP = np.append(np.zeros((1, np.floor(gyBlip.size / 2).astype(int))),
+                         np.kron(np.ones((1, rfShut.size - 1)), gyBlipPad))
+    else:
+        # center gy blips on gz rewinders
+        gyBlipPad = np.append(np.zeros((1, Ntz - nFlyback + np.floor((nFlyback - gyBlip.size) /
+                                                                     2).astype(int))), gyBlip)
+        gyBlipPad = np.append(gyBlipPad, np.zeros((1, Ntz - gyBlipPad.size)))
+        gyEP = np.kron(np.ones((1, rfShut.size - 1)), gyBlipPad)
+
+    gyEP = np.append(gyEP, np.zeros((1, (gzEP.size - gyEP.size))))
+
+    # calculate and add rewinders
+    [gzRew, _] = trajgrad.trap_grad(np.sum(gpos[0: - nFlyback]) * dt / 2, gzmax, gslew, dt)
+    if ~flyback:
+        gzEP = np.append(gzEP, ((-1) ^ np.remainder(rfShut.size, 2)) * gzRew)
+    else:
+        gzEP = np.append(gzEP, np.negative(gzRew))
+    [gyRew, _] = trajgrad.trap_grad(np.sum(gyBlip) * dt * (rfShut.size - 1) / 2, gymax, gslew, dt)
+    gyEP = np.append(gyEP, np.negative(gyRew))
+
+    # zero pad waveforms to same length
+    gzEP = np.append(gzEP, np.zeros((1, np.maximum(gzEP.size, gyEP.size) - gzEP.size)))
+    gyEP = np.append(gyEP, np.zeros((1, np.maximum(gzEP.size, gyEP.size) - gyEP.size)))
+    gEP = np.column_stack((gyEP, gzEP))  # stick them together into matrix
+    rfEP = np.transpose(np.append(rfEP, np.zeros(((gyEP.size - rfEP.size), 1))))
+
+    # calculate FM waveform for slice-shifting
+    if ~flyback:
+        rfFM = np.tile(np.append(np.ones((Ntz, 1)), np.negative(np.ones((Ntz, 1)))),
+                       (np.floor(rfShut.size / 2).astype(int), 1))
+        if np.remainder(rfShut.size, 2):
+            rfFM = np.append(rfFM, np.ones((Ntz, 1)))
+        rfFM = np.append(rfFM, np.zeros((rfEP.size - rfFM.size, 1)))
+    else:
+        rfFM = np.ones(rfEP.shape)
+
+    # calculate the phases to shift the slab to the other locations
+    phsMtx = np.angle(np.exp(1j * 2 * np.pi * np.matmul(np.transpose(np.array([
+        np.arange(0, Nshots + extraShotsForOverlap) /
+        (Nshots + extraShotsForOverlap)])),
+        np.array([np.arange(0, rfShut.size)]))))
+    rfPhs = np.kron(phsMtx, np.ones((1, Ntz)))
+    rfPhs = rfPhs[:, 0:rfPhs.size - nFlyback]
+    rfPhs = np.append(rfPhs, np.zeros((Nshots + extraShotsForOverlap, rfEP.size - rfPhs.shape[
+        1])), 1)
