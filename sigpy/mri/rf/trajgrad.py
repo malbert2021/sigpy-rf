@@ -11,7 +11,7 @@ import math
 
 __all__ = ['min_trap_grad', 'trap_grad', 'spiral_varden', 'spiral_arch', 'epi',
            'rosette', 'stack_of', 'traj_array_to_complex',
-           'traj_complex_to_array', 'min_time_gradient']
+           'traj_complex_to_array', 'spokes_grad', 'min_time_gradient']
 
 
 def min_trap_grad(area, gmax, dgdt, dt):
