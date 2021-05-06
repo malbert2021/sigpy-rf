@@ -213,7 +213,6 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
                 rfnorm[jj] = np.linalg.norm(rfm)
 
             ind = np.argmax(rfnorm)
-            print('Spoke ind: {}'.format(ind))
             k_new = np.expand_dims(np.array([kxs[ind], kys[ind]]), 0)
 
             if ii % 2 != 0:  # add to end of pulse
