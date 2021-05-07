@@ -147,113 +147,106 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
            local optimization methods. Magnetic Resonance in Medicine, 68(5),
            1553-62.
        """
+    nc = sens.shape[0]
 
-    device = backend.get_device(sens)
-    xp = device.xp
-    with device:
-        nc = sens.shape[0]
+    kmax = 1 / dx_max  # /cm, max spatial freq of trajectory
+    # greedy kx, ky grid
+    kxs, kys = np.meshgrid(np.linspace(-kmax / 2, kmax / 2 - 1 / fov,
+                                       np.int(fov * kmax)),
+                           np.linspace(-kmax / 2, kmax / 2 - 1 / fov,
+                                       np.int(fov * kmax)))
+    # vectorize the grid
+    kxs = kxs.flatten()
+    kys = kys.flatten()
 
-        kmax = 1 / dx_max  # /cm, max spatial freq of trajectory
-        # greedy kx, ky grid
-        kxs, kys = xp.meshgrid(xp.linspace(-kmax / 2, kmax / 2 - 1 / fov,
-                                           xp.int(fov * kmax)),
-                               xp.linspace(-kmax / 2, kmax / 2 - 1 / fov,
-                                           xp.int(fov * kmax)))
-        # vectorize the grid
-        kxs = kxs.flatten()
-        kys = kys.flatten()
+    # remove DC
+    dc = np.intersect1d(np.where((kxs == 0)), np.where((kys == 0)))[0]
+    kxs = np.concatenate([kxs[:dc], kxs[dc+1:]])
+    kys = np.concatenate([kys[:dc], kys[dc+1:]])
 
-        # remove DC
-        dc = xp.intersect1d(xp.where((kxs == 0)), xp.where((kys == 0)))[0]
-        kxs = xp.concatenate([kxs[:dc], kxs[dc+1:]])
-        kys = xp.concatenate([kys[:dc], kys[dc+1:]])
+    # step 2: design the weights
+    # initial kx/ky location is DC
+    k = np.expand_dims(np.array([0, 0]), 0)
 
-        # step 2: design the weights
-        # initial kx/ky location is DC
-        k = xp.expand_dims(xp.array([0, 0]), 0)
+    # initial target phase
+    phs = np.zeros((np.count_nonzero(mask), 1), dtype=np.complex)
 
-        # initial target phase
-        phs = xp.zeros((xp.count_nonzero(mask), 1), dtype=xp.complex)
+    for ii in range(n_spokes):
 
-        for ii in range(n_spokes):
+        # build Afull (and take only 0 locations into matrix)
+        Anum = rf.PtxSpatialExplicit(sens, k, gts, mask.shape, fov=fov,
+                                     ret_array=True)
+        Anum = Anum[~(Anum == 0).all(1)]
 
-            # build Afull (and take only 0 locations into matrix)
-            Anum = rf.PtxSpatialExplicit(sens, k, gts, mask.shape,
-                                         ret_array=True)
-            Anum = Anum[~(Anum == 0).all(1)]
+        # design wfull using MLS:
+        # initialize wfull
+        sys_a = (Anum.conj().T @ Anum + alpha * np.eye((ii+1)*nc))
+        sys_b = (Anum.conj().T @ np.exp(1j*phs))
+        w_full = np.linalg.solve(sys_a, sys_b)
 
-            # design wfull using MLS:
-            # initialize wfull
-            sys_a = (Anum.conj().T @ Anum + alpha * xp.eye((ii+1)*nc))
-            sys_b = (Anum.conj().T @ xp.exp(1j*phs))
-            w_full = xp.linalg.solve(sys_a, sys_b)
+        err = Anum @ w_full - np.exp(1j * phs)
+        cost = np.real(err.conj().T @ err + alpha * w_full.conj().T @ w_full)
+        cost_old = 10 * cost  # to get the loop going
+        while np.absolute(cost - cost_old) > iter_dif * cost_old:
+            cost_old = cost
+            phs = np.angle(Anum @ w_full)
+            w_full = np.linalg.solve(
+                (Anum.conj().T @ Anum + alpha * np.eye((ii + 1) * nc)),
+                (Anum.conj().T @ np.exp(1j * phs)))
+            err = Anum @ w_full - np.exp(1j * phs)
+            cost = np.real(err.conj().T @ err +
+                           alpha * w_full.conj().T @ w_full)
 
-            err = Anum @ w_full - xp.exp(1j * phs)
-            cost = err.conj().T @ err + alpha * w_full.conj().T @ w_full
-            cost = xp.real(cost)
-            cost_old = 10 * cost  # to get the loop going
-            while xp.absolute(cost - cost_old) > iter_dif * cost_old:
-                cost_old = cost
-                phs = xp.angle(Anum @ w_full)
-                w_full = xp.linalg.solve(
-                    (Anum.conj().T @ Anum + alpha * xp.eye((ii + 1) * nc)),
-                    (Anum.conj().T @ xp.exp(1j * phs)))
-                err = Anum @ w_full - xp.exp(1j * phs)
-                cost = xp.real(err.conj().T @ err +
-                               alpha * w_full.conj().T @ w_full)
+        # add a spoke using greedy method
+        if ii < n_spokes - 1:
 
-            # add a spoke using greedy method
-            if ii < n_spokes - 1:
+            r = np.exp(1j * phs) - Anum @ w_full
+            rfnorm = np.zeros(kxs.shape, dtype=np.complex)
+            for jj in range(kxs.size):
+                ks_test = np.expand_dims(np.array([kxs[jj], kys[jj]]), 0)
+                Anum = rf.PtxSpatialExplicit(sens, ks_test, gts, mask.shape,
+                                             fov=fov, ret_array=True)
+                Anum = Anum[~(Anum == 0).all(1)]
 
-                r = xp.exp(1j * phs) - Anum @ w_full
-                rfnorm = xp.zeros(kxs.shape, dtype=xp.complex)
-                for jj in range(kxs.size):
-                    ks_test = xp.expand_dims(xp.array([kxs[jj], kys[jj]]), 0)
-                    Anum = rf.PtxSpatialExplicit(sens, ks_test, gts,
-                                                 mask.shape, ret_array=True)
-                    Anum = Anum[~(Anum == 0).all(1)]
+                rfm = np.linalg.solve((Anum.conj().T @ Anum),
+                                      (Anum.conj().T @ r))
+                rfnorm[jj] = np.linalg.norm(rfm)
 
-                    rfm = xp.linalg.solve((Anum.conj().T @ Anum),
-                                          (Anum.conj().T @ r))
-                    rfnorm[jj] = xp.linalg.norm(rfm)
+            ind = np.argmax(rfnorm)
+            k_new = np.expand_dims(np.array([kxs[ind], kys[ind]]), 0)
 
-                ind = xp.argmax(rfnorm)
-                k_new = xp.expand_dims(xp.array([kxs[ind], kys[ind]]), 0)
+            if ii % 2 != 0:  # add to end of pulse
+                k = np.concatenate((k, k_new))
+            else:  # add to beginning of pulse
+                k = np.concatenate((k_new, k))
 
-                if ii % 2 != 0:  # add to end of pulse
-                    k = xp.concatenate((k, k_new))
-                else:  # add to beginning of pulse
-                    k = xp.concatenate((k_new, k))
+            # remove chosen point from candidates
+            kxs = np.concatenate([kxs[:ind], kxs[ind + 1:]])
+            kys = np.concatenate([kys[:ind], kys[ind + 1:]])
 
-                # remove chosen point from candidates
-                kxs = xp.concatenate([kxs[:ind], kxs[ind + 1:]])
-                kys = xp.concatenate([kys[:ind], kys[ind + 1:]])
+    # from our spoke selections, build the whole waveforms
 
-        # from our spoke selections, build the whole waveforms
+    # first, design our gradient waveforms:
+    g = rf.spokes_grad(k, tbw, sl_thick, gmax, dgdtmax, gts)
 
-        # first, design our gradient waveforms:
-        g = rf.spokes_grad(k, tbw, sl_thick, gmax, dgdtmax, gts)
+    # design our rf
+    # calculate the size of the traps in our gz waveform- will use to calc rf
+    area = tbw / (sl_thick / 10) / 4257  # thick * kwid = twb, kwid = gam*area
+    [subgz, nramp] = rf.min_trap_grad(area, gmax, dgdtmax, gts)
+    npts = 128
+    subrf = rf.dzrf(npts, tbw, 'st')
 
-        # design our rf
-        # calc. the size of the traps in our gz waveform- will use to calc rf
-        area = tbw / (sl_thick / 10) / 4257  # thick*kwid=twb, kwid=gam*area
-        [subgz, nramp] = rf.min_trap_grad(area, gmax, dgdtmax, gts)
-        npts = 128
-        subrf = rf.dzrf(npts, tbw, 'st')
+    n_plat = subgz.size - 2 * nramp  # time points on trap plateau
+    # interpolate to stretch out waveform to appropriate length
+    f = interp1d(np.arange(0, npts, 1) / npts, subrf, fill_value='extrapolate')
+    subrf = f(np.arange(0, n_plat, 1) / n_plat)
+    subrf = np.concatenate((np.zeros(nramp), subrf, np.zeros(nramp)))
 
-        n_plat = subgz.size - 2 * nramp  # time points on trap plateau
-        # interpolate to stretch out waveform to appropriate length
-        f = interp1d(np.arange(0, npts, 1) / npts, subrf,
-                     fill_value='extrapolate')
-        subrf = f(xp.arange(0, n_plat, 1) / n_plat)
-        subrf = xp.concatenate((xp.zeros(nramp), subrf, xp.zeros(nramp)))
+    pulses = np.kron(np.reshape(w_full, (nc, n_spokes)), subrf)
 
-        pulses = xp.kron(xp.reshape(w_full, (nc, n_spokes)), subrf)
+    # add zeros for gzref
+    rf_ref = np.zeros((nc, g.shape[1] - pulses.shape[1]))
+    pulses = np.concatenate((pulses, rf_ref), 1)
 
-        # add zeros for gzref
-        rf_ref = xp.zeros((nc, g.shape[1] - pulses.shape[1]))
-        pulses = xp.concatenate((pulses, rf_ref), 1)
-
-        return pulses, g
-
+    return pulses, g
 
