@@ -222,3 +222,5 @@ class TestAlg(unittest.TestCase):
             alg_method.update()
 
         npt.assert_allclose(np.squeeze(abs(alg_method.x)), x_numpy)
+
+

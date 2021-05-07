@@ -4,7 +4,7 @@
 """
 import numpy as np
 
-__all__ = ['bir4', 'hypsec', 'wurst', 'goia_wurst', 'bloch_siegert_fm']
+__all__ = ['bir4', 'hypsec', 'wurst', 'goia_wurst', 'adiabatic_bs_fm']
 
 
 def bir4(n, beta, kappa, theta, dw0):
@@ -156,7 +156,7 @@ def goia_wurst(n=512, dur=3.5e-3, f=0.9, n_b1=16, m_grad=4,
     return a, om, g
 
 
-def bloch_siegert_fm(n=512, dur=2e-3, b1p=20., k=42.,
+def adiabatic_bs_fm(n=512, dur=2e-3, b1p=20., k=42.,
                      gamma=2*np.pi*42.58):
     r"""
     U-shaped FM waveform for adiabatic Bloch-Siegert :math:`B_1^{+}` mapping
@@ -178,13 +178,9 @@ def bloch_siegert_fm(n=512, dur=2e-3, b1p=20., k=42.,
         Adiabatic RF pulse design for Bloch-Siegert B1+ mapping.
         Magn Reson Med, 70(3):829–835, 2013.
 
-        M. Jankiewicz, J. C. Gore, and W. A. Grissom.
-        Improved encoding pulses for Bloch-Siegert B1+ mapping.
-        J Magn Reson, 226:79–87, 2013.
-
     """
 
-    t = np.arange(1, n//2) * dur / n
+    t = np.arange(1, n//2 + 1) * dur / n
 
     om = gamma * b1p / np.sqrt((1 - gamma * b1p / k * t) ** -2 - 1)
     om = np.concatenate((om, om[::-1]))

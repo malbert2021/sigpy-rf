@@ -4,7 +4,7 @@
 
 import numpy as np
 
-__all__ = ['dinf']
+__all__ = ['dinf', 'calc_kbs']
 
 
 def dinf(d1=0.01, d2=0.01):
@@ -38,3 +38,32 @@ def dinf(d1=0.01, d2=0.01):
         + (a4 * l10d1 * l10d1 + a5 * l10d1 + a6)
 
     return d
+
+
+def calc_kbs(b1, wrf, T):
+    """Calculate Kbs for a given pulse shape. Kbs is a constant that describes
+    the phase shift (radians/Gauss^2) for a given RF pulse.
+    Args:
+        b1 (array): RF amplitude modulation, normalized.
+        wrf (array): frequency modulation (Hz).
+        T (float): pulse length (s)
+
+    Returns:
+        kbs (float): kbs constant for the input pulse, rad/gauss**2/msec
+
+    References:
+        Sacolick, L; Wiesinger, F; Hancu, I.; Vogel, M. (2010).
+        B1 Mapping by Bloch-Siegert Shift. Magn. Reson. Med., 63(5): 1315-1322.
+    """
+
+    # squeeze just to ensure 1D
+    b1 = np.squeeze(b1)
+    wrf = np.squeeze(wrf)
+
+    gam = 42.5657*2*np.pi*10**6  # rad/T
+    t = np.linspace(0, T, np.size(b1))
+
+    kbs = np.trapz(((gam*b1)**2/((2*np.pi*wrf)*2)),t)
+    kbs /= (10000*10000)  # want out rad/G**2
+
+    return kbs

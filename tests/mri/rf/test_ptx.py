@@ -159,12 +159,14 @@ class TestPtx(unittest.TestCase):
         radius = dim//2
         cx, cy = dim//2, dim//2
         y, x = np.ogrid[-radius:radius, -radius:radius]
+
         index = x**2 + y**2 <= radius**2
         roi[cy-radius:cy+radius, cx-radius:cx+radius][index] = 1
         sens = sens * roi
 
         [pulses, g] = rf.stspk(roi, sens, n_spokes, fov, dx_max, gts, sl_thick,
                                tbw, dgdtmax, gmax, alpha=1)
+
 
         # should give the number of pulses corresponding to number of TX ch
         npt.assert_equal(np.shape(pulses)[0], np.shape(sens)[0])

@@ -5,6 +5,7 @@
 
 import sigpy as sp
 import numpy as np
+
 from sigpy.mri import rf as rf
 from sigpy import backend
 from scipy.interpolate import interp1d
@@ -254,4 +255,5 @@ def stspk(mask, sens, n_spokes, fov, dx_max, gts, sl_thick, tbw, dgdtmax, gmax,
         pulses = xp.concatenate((pulses, rf_ref), 1)
 
         return pulses, g
+
 

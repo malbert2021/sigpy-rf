@@ -18,6 +18,7 @@ def min_trap_grad(area, gmax, dgdt, dt):
     r"""Minimal duration trapezoidal gradient designer. Design for target area
     under the flat portion (for non-ramp-sampled pulses)
 
+
     Args:
         area (float): pulse area in (g*sec)/cm
         gmax (float): maximum gradient in g/cm
@@ -29,7 +30,6 @@ def min_trap_grad(area, gmax, dgdt, dt):
 
         - **trap** (*array*): gradient waveform in g/cm.
         - **ramppts** (*int*): number of points in ramps.
-
     """
 
     if np.abs(area) > 0:
@@ -115,6 +115,7 @@ def trap_grad(area, gmax, dgdt, dt, *args):
             ramppts = int(np.ceil(np.max(flat) / dgdt / dt))
             ramp_up = np.linspace(0, ramppts, num=ramppts+1) / ramppts*flat_top
             ramp_dn = np.linspace(ramppts, 0, num=ramppts+1) / ramppts*flat_top
+
             trap = np.concatenate((ramp_up, flat, ramp_dn))
 
     else:

@@ -97,6 +97,67 @@ def init_optimal_spectral(A, sens, preproc=False):
         return xp.expand_dims(v[:, 0], 1)
 
 
+def init_spectral(A, sens, preproc=False):
+    """Function to return initial shim weights based on a spectral
+    method, an eigenvector-based method.
+
+        Args:
+            A (linop): sigpy Linear operator.
+            sens (array): sensitivity maps. [Nc dim_x dim_y]
+            preproc (bool): option to apply preprocessing function before \
+                finding eigenvectors
+
+        Returns:
+            Vector of complex shim weights.
+
+        References:
+            Candes, E., Li, X., Soltanolkotabi, M. (2011) 'Phase Retrieval via
+            Wirtinger Flow: Theory and Algorithms.' arXiv:1109.0573
+
+            Chandra, R., Zhong, Z., Hontz, J., McCulloch, V., Studer, C.,
+            Goldstein, T. (2017) 'PhasePack: A Phase Retrieval Library.'
+            arXiv:1711.10175.
+    """
+    device = backend.get_device(sens)
+    xp = device.xp
+    with device:
+        if hasattr(A, 'repr_str') and A.repr_str == 'pTx spatial explicit':
+            Anum = A.linops[1].mat
+        else:
+            Anum = A
+
+        sens = sens.flatten()
+        n = Anum.shape[1]
+        Anumt = xp.transpose(Anum)
+
+        m = sens.size
+        y = sens ** 2
+
+        # normalize the measurements
+        delta = m / n
+        ymean = y / xp.mean(y)
+
+        # apply pre-processing function
+        yplus = xp.amax(y)
+        Y = (1 / m) * Anumt @ Anum
+
+        if preproc:
+            T = (yplus - 1) / (yplus + xp.sqrt(delta) - 1)
+
+            # unnormalize
+            T *= ymean
+            T = xp.transpose(xp.expand_dims(T, axis=1))
+
+            for mm in range(m):
+                col = Anum[mm, :]
+                aat = col * xp.transpose(col)
+                Y = Y + (1 / m) * T[mm] * aat
+
+        w, v = xp.linalg.eigh(Y)
+
+        return xp.expand_dims(v[:, 0], 1)
+
+
 def init_circ_polar(sens):
     """Function to return circularly polarized initial shim weights. Provides
      shim weights that set the phase to be even in the middle of the sens

@@ -132,6 +132,171 @@ def nufft(input, coord, oversamp=1.25, width=4):
     return output
 
 
+def nufftiii(input, shape, icoord, ocoord, oversamp=1.25, width=4):
+    """Type III Non-uniform Fast Fourier Transform.
+
+    Args:
+        input (array): input signal domain array of shape
+            (..., n_{ndim - 1}, ..., n_1, n_0),
+            where ndim is specified by coord.shape[-1]. The nufft
+            is applied on the last ndim axes, and looped over
+            the remaining axes.
+        coord (array): Fourier domain coordinate array of shape (..., ndim).
+            ndim determines the number of dimensions to apply the nufft.
+            coord[..., i] should be scaled to have its range between
+            -n_i // 2, and n_i // 2.
+        oversamp (float): oversampling factor.
+        width (float): interpolation kernel full-width in terms of
+            oversampled grid.
+        n (int): number of sampling points of the interpolation kernel.
+
+    Returns:
+        array: Fourier domain data of shape
+            input.shape[:-ndim] + coord.shape[:-1].
+
+    References:
+        Fessler, J. A., & Sutton, B. P. (2003).
+        Nonuniform fast Fourier transforms using min-max interpolation
+        IEEE Transactions on Signal Processing, 51(2), 560-574.
+        Beatty, P. J., Nishimura, D. G., & Pauly, J. M. (2005).
+        Rapid gridding reconstruction with a minimal oversampling ratio.
+        IEEE transactions on medical imaging, 24(6), 799-808.
+
+    """
+    ndim = icoord.shape[-1]
+    beta = np.pi * (((width / oversamp) * (oversamp - 0.5))**2 - 0.8)**0.5
+    #shape = estimate_shape(-icoord)
+    
+    # adjoint NUFFT
+    os_shape = _get_oversamp_shape(list(shape), ndim, oversamp)
+
+    # Gridding
+    coord = _scale_coord(-icoord, shape, oversamp)
+    output = interp.gridding(input, coord, os_shape,
+                             kernel='kaiser_bessel', width=width, param=beta)
+    output /= width**ndim
+
+    # IFFT
+    output = ifft(output, axes=range(-ndim, 0), norm=None)
+
+    # Crop
+    output = util.resize(output, shape)
+    output *= util.prod(os_shape[-ndim:]) / util.prod(shape[-ndim:])**0.5
+
+    # Apodize
+    _apodize(output, ndim, oversamp, width, beta)
+
+    
+    # Inverse FFT
+    output = ifft(output, axes=range(-ndim, 0), center=True)
+    
+    
+    # Forward NUFFT
+    # Apodize
+    _apodize(output, ndim, oversamp, width, beta)
+
+    # Zero-pad
+    output /= util.prod(output.shape[-ndim:])**0.5
+    output = util.resize(output, os_shape)
+
+    # FFT
+    output = fft(output, axes=range(-ndim, 0), norm=None)
+
+    # Interpolate
+    coord = _scale_coord(ocoord, shape, oversamp)
+    output = interp.interpolate(
+        output, coord, kernel='kaiser_bessel', width=width, param=beta)
+    output /= width**ndim
+
+    return output
+
+
+def nufftiii_adjoint(input, shape, icoord, ocoord, oversamp=1.25, width=4):
+    """Type III Non-uniform Fast Fourier Transform.
+
+    Args:
+        input (array): input signal domain array of shape
+            (..., n_{ndim - 1}, ..., n_1, n_0),
+            where ndim is specified by coord.shape[-1]. The nufft
+            is applied on the last ndim axes, and looped over
+            the remaining axes.
+        coord (array): Fourier domain coordinate array of shape (..., ndim).
+            ndim determines the number of dimensions to apply the nufft.
+            coord[..., i] should be scaled to have its range between
+            -n_i // 2, and n_i // 2.
+        oversamp (float): oversampling factor.
+        width (float): interpolation kernel full-width in terms of
+            oversampled grid.
+        n (int): number of sampling points of the interpolation kernel.
+
+    Returns:
+        array: Fourier domain data of shape
+            input.shape[:-ndim] + coord.shape[:-1].
+
+    References:
+        Fessler, J. A., & Sutton, B. P. (2003).
+        Nonuniform fast Fourier transforms using min-max interpolation
+        IEEE Transactions on Signal Processing, 51(2), 560-574.
+        Beatty, P. J., Nishimura, D. G., & Pauly, J. M. (2005).
+        Rapid gridding reconstruction with a minimal oversampling ratio.
+        IEEE transactions on medical imaging, 24(6), 799-808.
+
+    """
+    ndim = icoord.shape[-1]
+    beta = np.pi * (((width / oversamp) * (oversamp - 0.5))**2 - 0.8)**0.5
+    #shape = estimate_shape(-icoord)
+    
+    # adjoint NUFFT
+    os_shape = _get_oversamp_shape(list(shape), ndim, oversamp)
+
+    # Gridding
+    coord = _scale_coord(ocoord, shape, oversamp)
+    output = interp.gridding(input, coord, os_shape,
+                             kernel='kaiser_bessel', width=width, param=beta)
+    output /= width**ndim
+
+    # Forward NUFFT
+    # Apodize
+    #_apodize(output, ndim, oversamp, width, beta)
+
+    # IFFT
+    output = ifft(output, axes=range(-ndim, 0), norm=None)
+
+    # Crop
+    output = util.resize(output, shape)
+    output *= util.prod(os_shape[-ndim:]) / util.prod(shape[-ndim:])**0.5
+
+    # Apodize
+    _apodize(output, ndim, oversamp, width, beta)
+
+    
+
+    # Inverse FFT
+    output = fft(output, axes=range(-ndim, 0), center=True)
+    
+    
+
+    # Forward NUFFT
+    # Apodize
+    _apodize(output, ndim, oversamp, width, beta)
+
+    # Zero-pad
+    output /= util.prod(output.shape[-ndim:])**0.5
+    output = util.resize(output, os_shape)
+
+    # FFT
+    output = fft(output, axes=range(-ndim, 0), norm=None)
+
+    # Interpolate
+    coord = _scale_coord(-icoord, shape, oversamp)
+    output = interp.interpolate(
+        output, coord, kernel='kaiser_bessel', width=width, param=beta)
+    output /= width**ndim
+
+
+    return output
+
+
 def estimate_shape(coord):
     """Estimate array shape from coordinates.
 

@@ -794,7 +794,6 @@ class GerchbergSaxton(Alg):
     def __init__(self, A, y, x0, max_iter=500, tol=0, max_tol=0, lamb=0):
 
         self.A = A
-        self.Aholder = A
         self.y = y
         self.x = x0
         self.max_iter = max_iter
