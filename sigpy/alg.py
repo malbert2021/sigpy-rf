@@ -786,12 +786,13 @@ class GerchbergSaxton(Alg):
     Args:
         A (Linop): system matrix Linop.
         y (array): observations.
+        x (array): initialization values.
         max_iter (int): maximum number of iterations.
         tol (float): optimization stopping tolerance.
         lamb (float): Tikhonov regularization value.
 
     """
-    def __init__(self, A, y, x0, max_iter=500, tol=0, max_tol=0, lamb=0):
+    def __init__(self, A, y, x0, max_iter=500, tol=0, lamb=0):
 
         self.A = A
         self.y = y
