@@ -5,6 +5,7 @@
 import numpy as np
 import sigpy.mri.rf.trajgrad as trajgrad
 import sigpy.mri.rf.slr as slr
+import sigpy.mri.rf as rf
 import sigpy.plot as pl
 import matplotlib.pyplot as pyplot
 
@@ -135,7 +136,6 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     # time into the pulse at which TE should start (ms) - calculate before we add rewinder zeros
     ttipdown = rfEP.size / 2 * dt * 1000
     # TODO: tested the general function but did not check the value of rfEP
-    # pl.LinePlot(rfEP)
 
     # build total gz gradient waveform
     if ~flyback:
@@ -200,3 +200,87 @@ def dz_shutters(Nshots, dt=6.4e-6, extraShotsForOverlap=0, cancelAlphaPhs=0, R=2
     rfPhs = rfPhs[:, 0:rfPhs.size - nFlyback]
     rfPhs = np.append(rfPhs, np.zeros((Nshots + extraShotsForOverlap, rfEP.size - rfPhs.shape[
         1])), 1)
+
+
+    # plot the pulses - RF and gradient
+    fig, axs = pyplot.subplots(3)
+    t = np.arange(0, np.size(rfEP)) * dt * 1000  # time in ms from s
+    t = t.T
+
+    axs[0].plot(t, rfEP)
+    axs[0].set_xlabel('ms')
+    axs[0].set_ylabel('radians')
+    axs[0].set_title('RF Pulse')
+
+    axs[1].plot(t, gEP)
+    axs[1].set_xlabel('ms')
+    axs[1].set_ylabel('g/cm')
+    axs[1].set_title('Gradient Waveforms')
+    axs[1].legend(['Gz','Gy'],loc=4)
+
+    '''
+    axs[2].plot(t, rfFM)
+    axs[2].set_xlabel('ms')
+    axs[2].set_ylabel('arb. units')
+    axs[2].set_title('Normalized FM Waveform for Slice Shifting')
+    '''
+
+    axs[2].plot(t, rfPhs.T)
+    axs[2].set_xlabel('ms')
+    axs[2].set_ylabel('radians')
+    axs[2].set_title('Phase Waveforms to Spatially Shift Shutters (One per Shot)')
+    
+    pyplot.show()
+
+
+    '''
+    # plot the pulses
+    fig, axs = pyplot.subplots(2, 3)
+    t = np.arange(0, np.size(rfEP)) * dt * 1000  # time in ms from s
+    t = t.T
+
+    axs[0,0].plot(np.arange(0, np.size(gpos)), np.squeeze(gpos))
+    axs[0,0].set_xlabel('arb. units')
+    axs[0,0].set_ylabel('arb. units')
+    axs[0,0].set_title('Trapozoid waveform')
+
+    axs[0,1].plot(rfShut)
+    axs[0,1].set_xlabel('arb. units')
+    axs[0,1].set_ylabel('arb. units')
+    axs[0,1].set_title('Shutter Envelope')
+
+    axs[0,2].plot(rfEPEven)
+    axs[0,2].set_xlabel('arb. units')
+    axs[0,2].set_ylabel('arb. units')
+    axs[0,2].set_title('Even Subpulses of RF')
+
+    pyplot.show()
+    '''
+
+    '''
+    # finally, show the simulation
+    inPlaneX = 85
+    inPlaneY = 96
+    mxyInPlane = np.zeros((inPlaneX, inPlaneY, Nshots))
+    gfull = np.vstack((0 * gEP[:, 1], gEP[:, 0]))
+    fovX = 20.2  # cm
+    fovY = 20.2  # cm
+    posx = np.linspace(-fovX / 2, fovX / 2 - fovX / 90, 90)
+    posy = np.linspace(-fovY / 2, fovY / 2 - fovY / 90, 90)
+    import sigpy.plot as pl
+    x, y = np.meshgrid(posx, posy)
+    spatial = np.stack((x, y), axis=2)  # cm
+    # pl.LinePlot(gfull)
+
+    xlin = np.linspace(-10, 10, 90)
+    for ii in range(0, Nshots):
+        pl.LinePlot(np.squeeze(rfPhs[ii, :].T))
+        cplx_pulse = np.squeeze(rfEP) * np.exp(1j * np.squeeze(rfPhs[ii, :].T))
+        cplx_pulse /= 2 * np.pi * 4258 * dt  # into gauss
+        # pl.LinePlot(cplx_pulse)
+        a, b = rf.abrm_nd(cplx_pulse, spatial, np.fliplr(2 * np.pi * 4258 * dt * gfull.T))
+        # a, b = rf.abrm_nd(cplx_pulse, xlin,
+        #                    2 * np.pi * 4258 * dt * gEP[:, 0])
+        mxy_plane = 2 * np.conj(a) * b
+        pyplot.imshow(abs(mxy_plane))
+'''
