@@ -3,8 +3,15 @@
 """
 
 import numpy as np
+import sigpy.mri.rf.sim as sim
 
-__all__ = ['dinf', 'calc_kbs']
+__all__ = ['bloch_sim_err', 'dinf', 'calc_kbs']
+
+
+def bloch_sim_err(b1, rfp_abs, rfp_angle, mx, my, mz, mxd, myd, mzd, w):
+    mx, my, mz = sim.arb_phase_b1sel(b1, rfp_abs, rfp_angle, mx, my, mz)
+
+    return w * ((mx - mxd) ^ 2 + (my - myd) ^ 2 + (mz - mzd) ^ 2)
 
 
 def dinf(d1=0.01, d2=0.01):
@@ -60,10 +67,10 @@ def calc_kbs(b1, wrf, T):
     b1 = np.squeeze(b1)
     wrf = np.squeeze(wrf)
 
-    gam = 42.5657*2*np.pi*10**6  # rad/T
+    gam = 42.5657 * 2 * np.pi * 10 ** 6  # rad/T
     t = np.linspace(0, T, np.size(b1))
 
-    kbs = np.trapz(((gam*b1)**2/((2*np.pi*wrf)*2)),t)
-    kbs /= (10000*10000)  # want out rad/G**2
+    kbs = np.trapz(((gam * b1) ** 2 / ((2 * np.pi * wrf) * 2)), t)
+    kbs /= (10000 * 10000)  # want out rad/G**2
 
     return kbs
