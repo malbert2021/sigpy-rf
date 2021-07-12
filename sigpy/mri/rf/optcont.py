@@ -3,9 +3,30 @@
 """
 from sigpy import backend
 from sigpy.mri.rf import slr
+from sigpy.mri.rf import util
 import numpy as np
+import jax as jax
 
 __all__ = ['optcont1d', 'blochsim', 'deriv']
+
+
+def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters = 5, step=0.00001, mx0 = 0, my0 = 0, mz0 = 1.0,):
+    err_grad = jax.grad(util.bloch_sim_err)
+
+    rfp_abs = np.absolute(rfp)
+    rfp_angle = np.angle(rfp)
+
+    for nn in range(niters):
+        #J = zeros(N, 1)
+        for ii in range(np.length(b1)):
+            J = err_grad(b1[ii], rfp_abs, rfp_angle, mx0, my0, mz0, mxd[ii], myd[ii], mzd[ii],
+                          w[ii])
+
+
+            #rfg = [rf_op]
+            ## += g(rfg)[1: end - 8]
+        #rf_op -= step * J
+
 
 
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,

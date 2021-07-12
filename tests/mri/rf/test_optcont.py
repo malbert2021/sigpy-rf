@@ -9,6 +9,16 @@ if __name__ == '__main__':
 
 class TestOptcont(unittest.TestCase):
 
+    def test_rf_autodiff(self):
+        rfp = [1, 2, 3, 4, 5]
+        b1 = [1,2,3]
+        mxd = [0.5, 0.5, 0.5]
+        myd = [0.5, 0.5, 0.5]
+        mzd = [0.5, 0.5, 0.5]
+        w = [1,1,1]
+        optcont.rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters=5, step=0.00001, mx0=0, my0=0,
+                           mz0=1.0)
+
     def test_optcont1d(self):
         print('Test not fully implemented')
 
