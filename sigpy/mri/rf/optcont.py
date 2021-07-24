@@ -6,6 +6,7 @@ from sigpy.mri.rf import slr
 from sigpy.mri.rf import util
 import numpy as np
 import jax as jax
+import jax.numpy as jnp
 
 __all__ = ['optcont1d', 'blochsim', 'deriv']
 
@@ -13,21 +14,20 @@ __all__ = ['optcont1d', 'blochsim', 'deriv']
 def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters = 5, step=0.00001, mx0 = 0, my0 = 0, mz0 = 1.0,):
     err_grad = jax.grad(util.bloch_sim_err)
 
-    rfp_abs = np.absolute(rfp)
-    rfp_angle = np.angle(rfp)
+    rfp_abs = jnp.absolute(rfp)
+    rfp_angle = jnp.angle(rfp)
+    rf_op = jnp.append(rfp_abs, rfp_angle)
+    N = len(rf_op)
+    nt = np.floor(N/2).astype(int)
 
     for nn in range(niters):
-        #J = zeros(N, 1)
-        for ii in range(np.length(b1)):
-            J = err_grad(b1[ii], rfp_abs, rfp_angle, mx0, my0, mz0, mxd[ii], myd[ii], mzd[ii],
+        J = jnp.zeros(N)
+        for ii in range(b1.size):
+            J += err_grad(rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii],
                           w[ii])
+        rf_op -= step * J
 
-
-            #rfg = [rf_op]
-            ## += g(rfg)[1: end - 8]
-        #rf_op -= step * J
-
-
+    return rf_op
 
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
               d2=0.01, dt=4e-6, conv_tolerance=1e-5):
