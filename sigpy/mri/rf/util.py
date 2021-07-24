@@ -8,10 +8,10 @@ import sigpy.mri.rf.sim as sim
 __all__ = ['bloch_sim_err', 'dinf', 'calc_kbs']
 
 
-def bloch_sim_err(b1, rfp_abs, rfp_angle, mx, my, mz, mxd, myd, mzd, w):
-    mx, my, mz = sim.arb_phase_b1sel(b1, rfp_abs, rfp_angle, mx, my, mz)
+def bloch_sim_err(rf_op, b1, mx, my, mz, nt, mxd, myd, mzd, w):
+    mx, my, mz = sim.arb_phase_b1sel(rf_op, b1, mx, my, mz, nt)
 
-    return w * ((mx - mxd) ^ 2 + (my - myd) ^ 2 + (mz - mzd) ^ 2)
+    return w * ((mx - mxd) * (mx - mxd) + (my - myd) * (my - myd) + (mz - mzd) * (mz - mzd))
 
 
 def dinf(d1=0.01, d2=0.01):
