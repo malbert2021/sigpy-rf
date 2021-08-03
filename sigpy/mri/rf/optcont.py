@@ -7,25 +7,31 @@ from sigpy.mri.rf import util
 import numpy as np
 import jax as jax
 import jax.numpy as jnp
+import time
 
-__all__ = ['optcont1d', 'blochsim', 'deriv']
+__all__ = ['rf_autodiff', 'optcont1d', 'blochsim', 'deriv']
 
 
 def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters = 5, step=0.00001, mx0 = 0, my0 = 0, mz0 = 1.0,):
     err_grad = jax.grad(util.bloch_sim_err)
+    print('Finish autodiff')
 
     rfp_abs = jnp.absolute(rfp)
     rfp_angle = jnp.angle(rfp)
     rf_op = jnp.append(rfp_abs, rfp_angle)
     N = len(rf_op)
-    nt = np.floor(N/2).astype(int)
+    nt = jnp.floor(N/2).astype(int)
+    print('Start iters')
+    t0 = time.time()
 
     for nn in range(niters):
-        J = jnp.zeros(N)
+        J = np.zeros(N)
         for ii in range(b1.size):
             J += err_grad(rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii],
                           w[ii])
+            print('Finish one b1. Time: {:f}'.format(time.time() - t0))
         rf_op -= step * J
+        print('Finish iter. Time: {:f}'.format(time.time()-t0))
 
     return rf_op
 

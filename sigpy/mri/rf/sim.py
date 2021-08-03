@@ -9,7 +9,7 @@ import jax.numpy as jnp
 __all__ = ['arb_phase_b1sel', 'abrm', 'abrm_nd', 'abrm_hp', 'abrm_ptx']
 
 
-def arb_phase_b1sel(rf_op, b1, mx, my, mz, nt):
+def arb_phase_b1sel_np(rf_op, b1, mx, my, mz, nt):
     # rfp = rfp_bs + rfp_ss
     # rf_op = rfp_abs + rfp_angle
     # nt = jnp.floor(len(rf_op) / 2)
@@ -21,6 +21,29 @@ def arb_phase_b1sel(rf_op, b1, mx, my, mz, nt):
 
         cb = np.cos(rf_b1)
         sb = np.sin(rf_b1)
+
+        mx_new = (ca * ca + sa * sa * cb) * mx + sa * ca * (1 - cb) * my + sa * sb * mz
+        my_new = sa * ca * (1 - cb) * mx + (sa * sa + ca * ca * cb) * my - ca * sb * mz
+        mz_new = - sa * sb * mx + ca * sb * my + cb * mz
+
+        mx = mx_new
+        my = my_new
+        mz = mz_new
+
+    return mx, my, mz
+
+def arb_phase_b1sel(rf_op, b1, mx, my, mz, nt):
+    # rfp = rfp_bs + rfp_ss
+    # rf_op = rfp_abs + rfp_angle
+    # nt = jnp.floor(len(rf_op) / 2)
+
+    for tt in range(nt):
+        rf_b1 = rf_op[tt] * b1
+        ca = jnp.cos(rf_op[nt + tt])
+        sa = jnp.sin(rf_op[nt + tt])
+
+        cb = jnp.cos(rf_b1)
+        sb = jnp.sin(rf_b1)
 
         mx_new = (ca * ca + sa * sa * cb) * mx + sa * ca * (1 - cb) * my + sa * sb * mz
         my_new = sa * ca * (1 - cb) * mx + (sa * sa + ca * ca * cb) * my - ca * sb * mz

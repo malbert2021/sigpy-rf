@@ -1,9 +1,7 @@
 import unittest
 
 import numpy as np
-import jax.numpy as jnp
 import numpy.testing as npt
-
 import sigpy.mri.rf as rf
 
 import matplotlib.pyplot as pyplot
@@ -15,7 +13,6 @@ if __name__ == '__main__':
 class TestSim(unittest.TestCase):
 
     def test_arb_phase_b1sel(self):
-        # generate rfp and corresponding magnetization
         print('Test of arb_phase_b1sel(rf_op, b1, mx_0, my_0, mz_0, nt) started. Please '
               'temporarily change jnp to np in function for time efficiency.')
 
