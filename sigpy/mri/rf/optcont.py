@@ -7,33 +7,53 @@ from sigpy.mri.rf import util
 import numpy as np
 import jax as jax
 import jax.numpy as jnp
+from jax import jit
 import time
 
 __all__ = ['rf_autodiff', 'optcont1d', 'blochsim', 'deriv']
 
 
-def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters = 5, step=0.00001, mx0 = 0, my0 = 0, mz0 = 1.0,):
-    err_grad = jax.grad(util.bloch_sim_err)
+def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters=5, step=0.00001, mx0=0, my0=0, mz0=1.0, ):
+    # err_jit = jit(util.bloch_sim_err)
+    # err_grad = jax.grad(err_jit)
+    # err_grad = jax.grad(util.bloch_sim_err_combined)
+    # err_grad = jit(err_grad)
+    err_jac = jax.jacfwd(util.bloch_sim_err_single)
     print('Finish autodiff')
 
     rfp_abs = jnp.absolute(rfp)
     rfp_angle = jnp.angle(rfp)
     rf_op = jnp.append(rfp_abs, rfp_angle)
     N = len(rf_op)
-    nt = jnp.floor(N/2).astype(int)
+    nt = jnp.floor(N / 2).astype(int)
     print('Start iters')
     t0 = time.time()
+
+    # for nn in range(niters):
+    #     J = err_grad(rf_op, b1, mx0, my0, mz0, nt, mxd, myd, mzd, w)
+    #     rf_op -= step * J
+    #     print('Finish iter. Time: {:f}'.format(time.time()-t0))
+
+    # for nn in range(niters):
+    #     J = np.zeros(N)
+    #     for ii in range(b1.size):
+    #         J += err_grad(rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii],
+    #                       w[ii])
+    #         print('Finish one b1. Time: {:f}'.format(time.time() - t0))
+    #     rf_op -= step * J
+    #     print('Finish iter. Time: {:f}'.format(time.time()-t0))
 
     for nn in range(niters):
         J = np.zeros(N)
         for ii in range(b1.size):
-            J += err_grad(rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii],
-                          w[ii])
+            J += err_jac(jnp.array([rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii],
+                                    w[ii]]))
             print('Finish one b1. Time: {:f}'.format(time.time() - t0))
         rf_op -= step * J
-        print('Finish iter. Time: {:f}'.format(time.time()-t0))
+        print('Finish iter. Time: {:f}'.format(time.time() - t0))
 
     return rf_op
+
 
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
               d2=0.01, dt=4e-6, conv_tolerance=1e-5):

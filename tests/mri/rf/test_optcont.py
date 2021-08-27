@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 import numpy.testing as npt
 import jax.numpy as jnp
+from jax import jit
 from sigpy.mri.rf import optcont
 import sigpy.mri.rf as rf
 
@@ -27,7 +28,7 @@ class TestOptcont(unittest.TestCase):
         rfp_bs, rfp_ss, _ = rf.dz_bssel_rf(dt=dt, tb=2, ndes=256, ptype='ex', flip=np.pi / 2,
                                            pbw=pbw,
                                            pbc=[pbc], d1e=0.01, d2e=0.01,
-                                           rampfilt=True, bs_offset=7500)
+                                           rampfilt=True, bs_offset=2500)
         full_pulse = (rfp_bs + rfp_ss) * 2 * np.pi * 4258 * dt  # scaled
         print('Finish Generate rf pulse. Time: {:f}'.format(time.time()-t0))
 
@@ -36,8 +37,8 @@ class TestOptcont(unittest.TestCase):
         rfp_angle = np.angle(full_pulse)
         nt = np.size(rfp_abs)
         rf_op = np.append(rfp_abs, rfp_angle)
-        b1 = np.arange(0, 2, 0.01)  # gauss, b1 range to sim over
-        w = np.ones(len(rf_op))  # weight
+
+        w = np.ones(nb1)  # weight
 
         Mxd = np.zeros(nb1)
         Myd = np.zeros(nb1)
@@ -52,8 +53,11 @@ class TestOptcont(unittest.TestCase):
         Mxd = np.array(Mxd)
         Myd = np.array(Myd)
         Mzd = np.array(Mzd)
+        # autodiff_jit = jit(optcont.rf_autodiff)
+        # rf_test_1 = autodiff_jit(rf_op, b1, Mxd, Myd, Mzd, w, niters=1, step=0.00001, mx0=0,
+        #                                 my0=0, mz0=1.0)
         rf_test_1 = optcont.rf_autodiff(rf_op, b1, Mxd, Myd, Mzd, w, niters=1, step=0.00001, mx0=0,
-                                        my0=0, mz0=1.0)
+                                       my0=0, mz0=1.0)
         print('Finish sanity check autodiff. Time: {:f}'.format(time.time()-t0))
 
         # compare results
