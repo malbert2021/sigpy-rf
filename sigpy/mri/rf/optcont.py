@@ -13,46 +13,26 @@ import time
 __all__ = ['rf_autodiff', 'optcont1d', 'blochsim', 'deriv']
 
 
-def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters=5, step=0.00001, mx0=0, my0=0, mz0=1.0, ):
-    # err_jit = jit(util.bloch_sim_err)
-    # err_grad = jax.grad(err_jit)
-    # err_grad = jax.grad(util.bloch_sim_err_combined)
-    # err_grad = jit(err_grad)
-    err_jac = jax.jacfwd(util.bloch_sim_err_single)
-    print('Finish autodiff')
+def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters=5, step=0.00001, mx0=0, my0=0, mz0=1.0):
+    err_jac = jax.jacfwd(util.bloch_sim_err)
 
     rfp_abs = jnp.absolute(rfp)
     rfp_angle = jnp.angle(rfp)
     rf_op = jnp.append(rfp_abs, rfp_angle)
     N = len(rf_op)
     nt = jnp.floor(N / 2).astype(int)
-    print('Start iters')
-    t0 = time.time()
-
-    # for nn in range(niters):
-    #     J = err_grad(rf_op, b1, mx0, my0, mz0, nt, mxd, myd, mzd, w)
-    #     rf_op -= step * J
-    #     print('Finish iter. Time: {:f}'.format(time.time()-t0))
-
-    # for nn in range(niters):
-    #     J = np.zeros(N)
-    #     for ii in range(b1.size):
-    #         J += err_grad(rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii],
-    #                       w[ii])
-    #         print('Finish one b1. Time: {:f}'.format(time.time() - t0))
-    #     rf_op -= step * J
-    #     print('Finish iter. Time: {:f}'.format(time.time()-t0))
 
     for nn in range(niters):
         J = np.zeros(N)
         for ii in range(b1.size):
-            J += err_jac(jnp.array([rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii],
-                                    w[ii]]))
-            print('Finish one b1. Time: {:f}'.format(time.time() - t0))
+            J += err_jac(rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii], w[ii])
         rf_op -= step * J
-        print('Finish iter. Time: {:f}'.format(time.time() - t0))
 
-    return rf_op
+    [refined_abs, refined_angle] = jnp.split(rf_op, [nt])
+    refined = refined_abs * jnp.exp(1j * refined_angle)
+    refined_nda = np.reshape(refined, [1, nt])
+
+    return refined_nda
 
 
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,

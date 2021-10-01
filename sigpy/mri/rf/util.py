@@ -36,7 +36,7 @@ def bloch_sim_err_single(alpha):
 
 
 def bloch_sim_err(rf_op, b1, mx, my, mz, nt, mxd, myd, mzd, w):
-    mx, my, mz = sim.arb_phase_b1sel(rf_op, b1, mx, my, mz, nt)
+    mx, my, mz = sim.arb_phase_b1sel_loop(rf_op, b1, mx, my, mz, nt)
 
     return w * ((mx - mxd) * (mx - mxd) + (my - myd) * (my - myd) + (mz - mzd) * (mz - mzd))
 
