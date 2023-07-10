@@ -3,7 +3,6 @@
 """
 from sigpy import backend
 from sigpy.mri.rf import slr
-from sigpy.mri.rf import util
 import numpy as np
 import torch
 
@@ -106,8 +105,8 @@ def blochsim_errAD(rfp, x, g, w, db, da=None):
     """
     ar, ai, br, bi = blochsimAD(rfp, x, g)
     err = torch.sum(w * ((db[:, 0] - br) ** 2 + (db[:, 1] - bi) ** 2))
-    
-    if da != None:
+
+    if da:
         err += torch.sum(w * ((da[:, 0] - ar) ** 2 + (da[:, 1] - ai) ** 2))
     
     return err
@@ -171,14 +170,14 @@ def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
     
     def closure():
         lbfgs.zero_grad()
-        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, db, w)
+        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, w, db)
         loss.backward()
         return loss
     
     # perform optimization using LBFGS
     cost = np.zeros(max_iters)    
     for ii in range(0, max_iters, 1):
-        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, db, w)
+        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, w, db)
         cost[ii] = loss.item()
         lbfgs.step(closure)
 
