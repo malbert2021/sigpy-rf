@@ -5,47 +5,43 @@ from sigpy import backend
 from sigpy.mri.rf import slr
 from sigpy.mri.rf import util
 import numpy as np
-# import jax as jax
-# import jax.numpy as jnp
-# from jax import jit
-import time
 import torch
 
 
-__all__ = ['blochsimAD', 'blochsim_errAD', 'optcont1dLBFGS', 'optcont1d', 'blochsim', 'deriv']
+__all__ = ['blochsimAD', 'blochsim_errAD', 'optcont1dLBFGS', 'optcont1d', 
+           'blochsim', 'deriv']
+
 
 def blochsimAD(rf, x, g):
-    """1D RF pulse simulation, with simultaneous RF + gradient rotations.
-    Assume x has inverse spatial units of g, and g has gamma*dt applied and
-    assume x = [...,Ndim], g = [Ndim,Nt].
+    r"""1D RF pulse simulation, with simultaneous RF + gradient rotations.
+    Assume x has inverse spatial units of g, and g has gamma*dt applied, and 
+    assume g = [Nt], and rf = [Nt, 2] with real components in the first column 
+    and imag components in the second column.
 
-     Args:
-         rf (array): rf waveform input.
-         x (array): spatial locations.
-         g (array): gradient waveform.
+    Args:
+        rf (tensor): rf waveform input.
+        x (tensor): spatial locations.
+        g (tensor): gradient waveform.
 
-     Returns:
-         array: SLR alpha parameter
-         array: SLR beta parameter
+    Returns:
+        tensor: real component of SLR alpha parameter
+        tensor: imag component of SLR alpha parameter
+        tensor: real component of SLR beta parameter
+        tensor: imag component of SLR beta parameter
     """
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #device = "cpu"
     
-    ar = torch.ones((x.size()[0], ), device=device) #, dtype=torch.cfloat)
+    ar = torch.ones((x.size()[0], ), device=device)
     ai = torch.zeros((x.size()[0],), device=device)
     br = torch.zeros((x.size()[0],), device=device)
     bi = torch.zeros((x.size()[0],), device=device)
-    #ar = ar.to(device)
-    #ai = ai.to(device)
-    #br = br.to(device)
-    #bi = bi.to(device)
     
     for mm in range(0, rf.size()[0], 1):  # loop over time
 
         pt = rf[mm, :]
-        
         mag = torch.sqrt(torch.sum(pt**2))
         ang = torch.arctan2(pt[1], pt[0])
+        
         # apply RF
         cr = torch.cos(mag / 2)
         ci = 0
@@ -61,7 +57,8 @@ def blochsimAD(rf, x, g):
         ai = ait
         br = brt
         bi = bit
-        
+
+        # apply gradient
         zr = torch.cos(-1 * x * g[mm])
         zi = torch.sin(-1 * x * g[mm])
     
@@ -71,6 +68,7 @@ def blochsimAD(rf, x, g):
         br = brt
         bi = bit
     
+    # apply total phase accrual
     zr = torch.cos(x * sum(g) / 2)
     zi = torch.sin(x * sum(g) / 2)
 
@@ -86,13 +84,38 @@ def blochsimAD(rf, x, g):
     
     return ar, ai, br, bi
     
-def blochsim_errAD(rfp, x, g, db, w):
-    ar, ai, br, bi = blochsimAD(rfp, x, g)
-    return torch.sum(w * ((db[:, 0] - br) ** 2 + (db[:, 1] - bi) ** 2))
 
-def optcont1dLBFGS(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
-              d2=0.01, dt=4e-6, conv_tolerance=1e-5):
-    """1D optimal control pulse designer
+def blochsim_errAD(rfp, x, g, w, db, da=None):
+    r"""Loss function for 1D optimal control pulse designer using autodiff.
+    Assume x has inverse spatial units of g, and g has gamma*dt applied, and 
+    assume g = [Nt], rf = [Nt, 2] with real components in the first column 
+    and imag components in the second column, and db = [..., 2 and da = [..., 2]
+    with real components in the first column and imag components in the second 
+    column.
+
+    Args:
+        rfp (tensor): rf waveform input.
+        x (tensor): spatial locations.
+        g (tensor): gradient waveform.
+        w (tensor): weights on profile locations for error calculation. 
+        db (tensor): target SLR beta parameter
+        da (tensor): target SLR alpha parameter
+
+    Returns:
+        float: weighted error between pulse's SLR parameter profile and target
+    """
+    ar, ai, br, bi = blochsimAD(rfp, x, g)
+    err = torch.sum(w * ((db[:, 0] - br) ** 2 + (db[:, 1] - bi) ** 2))
+    
+    if da != None:
+        err += torch.sum(w * ((da[:, 0] - ar) ** 2 + (da[:, 1] - ai) ** 2))
+    
+    return err
+
+
+def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
+              d2=0.01, dt=4e-6, conv_tolerance=1e-9):
+    r"""1D optimal control pulse designer using autodiff
 
     Args:
         dthick: thickness of the slice (cm)
@@ -111,17 +134,14 @@ def optcont1dLBFGS(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
         pulse: pulse of interest, complex RF waveform
 
     """
-
-    # set mag of gamgdt according to tb + dthick
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    #device = "cpu"
-    print(device)
+
+    # set mag of gamgdt according to tb + dthick        
     gambar = 4257  # gamma/2/pi, Hz/g
     gmag = tb / (N * dt) / dthick / gambar
 
     # get spatial locations + gradient
     x = torch.arange(0, N * os, 1, device=device) / N / os - 1 / 2
-
     gamgdt = 2 * np.pi * gambar * gmag * dt * torch.ones(N, device=device)    
 
     # set up target beta pattern
@@ -139,20 +159,15 @@ def optcont1dLBFGS(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
     wb = [1, d1 / d2]
     w = dpass + wb[1] / wb[0] * dstop  # 'points we care about' mask
 
-    #target beta pattern
+    # target beta pattern
     db = torch.zeros(N*os, 2, device=device)
-    db[:, 0] = np.sqrt(1/2)*dpass*torch.cos(-1/2*x*2*np.pi) # target beta pattern
-    db[:, 1] = np.sqrt(1/2)*dpass*torch.sin(-1/2*x*2*np.pi) # target beta pattern
+    db[:, 0] = np.sqrt(1/2)*dpass*torch.cos(-1/2*x*2*np.pi)
+    db[:, 1] = np.sqrt(1/2)*dpass*torch.sin(-1/2*x*2*np.pi)
     db[0, 0] = 0
 
+    # initialize optimization
     pulse = torch.full((N,2), 1e-7, requires_grad = True, device = device)
-
-    #t0 = time.time()
-    #loss = blochsim_err(pulse, x/(gambar*dt*gmag), gamgdt, db, w)
-    #loss.backward()
-    #t1 = time.time()
-    
-    lbfgs = torch.optim.LBFGS([pulse], lr = .1)
+    lbfgs = torch.optim.LBFGS([pulse], lr = .1, tolerance_change=conv_tolerance)
     
     def closure():
         lbfgs.zero_grad()
@@ -160,37 +175,16 @@ def optcont1dLBFGS(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
         loss.backward()
         return loss
     
-    t0 = time.time()
+    # perform optimization using LBFGS
     cost = np.zeros(max_iters)    
     for ii in range(0, max_iters, 1):
         loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, db, w)
         cost[ii] = loss.item()
         lbfgs.step(closure)
-        #print("Iter: %d, loss: %1.8f" % (ii, loss.item())) 
-    t1 = time.time()
-    #return gamgdt, pulse, cost, t1-t0
-    return t1 - t0
 
-# def rf_autodiff(rfp, b1, mxd, myd, mzd, w, niters=5, step=0.00001, mx0=0, my0=0, mz0=1.0):
-#     err_jac = jax.jacfwd(util.bloch_sim_err)
-
-#     rfp_abs = jnp.absolute(rfp)
-#     rfp_angle = jnp.angle(rfp)
-#     rf_op = jnp.append(rfp_abs, rfp_angle)
-#     N = len(rf_op)
-#     nt = jnp.floor(N / 2).astype(int)
-
-#     for nn in range(niters):
-#         J = np.zeros(N)
-#         for ii in range(b1.size):
-#             J += err_jac(rf_op, b1[ii], mx0, my0, mz0, nt, mxd[ii], myd[ii], mzd[ii], w[ii])
-#         rf_op -= step * J
-
-#     [refined_abs, refined_angle] = jnp.split(rf_op, [nt])
-#     refined = refined_abs * jnp.exp(1j * refined_angle)
-#     refined_nda = np.reshape(refined, [1, nt])
-
-#     return refined_nda
+    pulse = pulse[:, 0] + 1j * pulse[:, 1] # pulse in complex form
+    
+    return gamgdt, pulse
 
 
 def optcont1d(dthick, N, os, tb, stepsize=0.001, max_iters=1000, d1=0.01,
