@@ -2,9 +2,11 @@
 """Optimal Control Pulse Design functions.
 """
 from sigpy import backend
+from sigpy import config
 from sigpy.mri.rf import slr
 import numpy as np
-import torch
+if config.pytorch_enabled:
+    import torch
 
 
 __all__ = ['blochsimAD', 'blochsim_errAD', 'optcont1dLBFGS', 'optcont1d', 
