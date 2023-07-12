@@ -13,7 +13,7 @@ __all__ = ['blochsimAD', 'blochsim_errAD', 'optcont1dLBFGS', 'optcont1d',
            'blochsim', 'deriv']
 
 
-def blochsimAD(rf, x, g):
+def blochsimAD(rf, x, g, device):
     r"""1D RF pulse simulation, with simultaneous RF + gradient rotations.
     Assume x has inverse spatial units of g, and g has gamma*dt applied, and 
     assume g = [Nt], and rf = [Nt, 2] with real components in the first column 
@@ -23,6 +23,7 @@ def blochsimAD(rf, x, g):
         rf (tensor): rf waveform input.
         x (tensor): spatial locations.
         g (tensor): gradient waveform.
+        device (pytorch device): device to run function on
 
     Returns:
         tensor: real component of SLR alpha parameter
@@ -30,8 +31,6 @@ def blochsimAD(rf, x, g):
         tensor: real component of SLR beta parameter
         tensor: imag component of SLR beta parameter
     """
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    
     ar = torch.ones((x.size()[0], ), device=device)
     ai = torch.zeros((x.size()[0],), device=device)
     br = torch.zeros((x.size()[0],), device=device)
@@ -86,7 +85,7 @@ def blochsimAD(rf, x, g):
     return ar, ai, br, bi
     
 
-def blochsim_errAD(rfp, x, g, w, db, da=None):
+def blochsim_errAD(rfp, x, g, device, w, db, da=None):
     r"""Loss function for 1D optimal control pulse designer using autodiff.
     Assume x has inverse spatial units of g, and g has gamma*dt applied, and 
     assume g = [Nt], rf = [Nt, 2] with real components in the first column 
@@ -98,6 +97,7 @@ def blochsim_errAD(rfp, x, g, w, db, da=None):
         rfp (tensor): rf waveform input.
         x (tensor): spatial locations.
         g (tensor): gradient waveform.
+        device (pytorch device): device to run function on
         w (tensor): weights on profile locations for error calculation. 
         db (tensor): target SLR beta parameter
         da (tensor): target SLR alpha parameter
@@ -105,7 +105,7 @@ def blochsim_errAD(rfp, x, g, w, db, da=None):
     Returns:
         float: weighted error between pulse's SLR parameter profile and target
     """
-    ar, ai, br, bi = blochsimAD(rfp, x, g)
+    ar, ai, br, bi = blochsimAD(rfp, x, g, device)
     err = torch.sum(w * ((db[:, 0] - br) ** 2 + (db[:, 1] - bi) ** 2))
 
     if da:
@@ -115,7 +115,7 @@ def blochsim_errAD(rfp, x, g, w, db, da=None):
 
 
 def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
-              d2=0.01, dt=4e-6, conv_tolerance=1e-9):
+              d2=0.01, dt=4e-6, conv_tolerance=1e-9, dev="cpu"):
     r"""1D optimal control pulse designer using autodiff
 
     Args:
@@ -129,13 +129,16 @@ def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
         d2: ripple level in stopband
         dt: dwell time (s)
         conv_tolerance: max change between iterations, convergence tolerance
+        dev: device to run function on ("gpu" to run on CUDA, otherwise defaults
+          to running on cpu)
 
     Returns:
         gamgdt: scaled gradient
         pulse: pulse of interest, complex RF waveform
 
     """
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if dev == "gpu" and
+                          torch.cuda.is_available() else "cpu")
 
     # set mag of gamgdt according to tb + dthick        
     gambar = 4257  # gamma/2/pi, Hz/g
@@ -172,14 +175,14 @@ def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
     
     def closure():
         lbfgs.zero_grad()
-        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, w, db)
+        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, device, w, db)
         loss.backward()
         return loss
     
     # perform optimization using LBFGS
     cost = np.zeros(max_iters)    
     for ii in range(0, max_iters, 1):
-        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, w, db)
+        loss = blochsim_errAD(pulse, x/(gambar*dt*gmag), gamgdt, device, w, db)
         cost[ii] = loss.item()
         lbfgs.step(closure)
 
