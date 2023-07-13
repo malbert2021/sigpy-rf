@@ -14,10 +14,10 @@ __all__ = ['blochsimAD', 'blochsim_errAD', 'optcont1dLBFGS', 'optcont1d',
 
 
 def blochsimAD(rf, x, g, device):
-    r"""1D RF pulse simulation, with simultaneous RF + gradient rotations.
+    r"""RF pulse simulation, with simultaneous RF + gradient rotations.
     Assume x has inverse spatial units of g, and g has gamma*dt applied, and 
-    assume g = [Nt], and rf = [Nt, 2] with real components in the first column 
-    and imag components in the second column.
+    assume x = [..., Ndim], g = [Nt, Ndim], and rf = [Nt, 2] with real 
+    components in the first column and imag components in the second column.
 
     Args:
         rf (tensor): rf waveform input.
@@ -59,8 +59,8 @@ def blochsimAD(rf, x, g, device):
         bi = bit
 
         # apply gradient
-        zr = torch.cos(-1 * x * g[mm])
-        zi = torch.sin(-1 * x * g[mm])
+        zr = torch.cos(-1 * x @ g[mm, :])
+        zi = torch.sin(-1 * x @ g[mm, :])
     
         brt = br * zr - bi * zi
         bit = br * zi + bi * zr
@@ -69,8 +69,8 @@ def blochsimAD(rf, x, g, device):
         bi = bit
     
     # apply total phase accrual
-    zr = torch.cos(x * sum(g) / 2)
-    zi = torch.sin(x * sum(g) / 2)
+    zr = torch.cos(x @ sum(g, 0) / 2)
+    zi = torch.sin(x @ sum(g, 0) / 2)
 
     art = ar * zr - ai * zi
     ait = ar * zi + ai * zr
@@ -88,10 +88,10 @@ def blochsimAD(rf, x, g, device):
 def blochsim_errAD(rfp, x, g, device, w, db, da=None):
     r"""Loss function for 1D optimal control pulse designer using autodiff.
     Assume x has inverse spatial units of g, and g has gamma*dt applied, and 
-    assume g = [Nt], rf = [Nt, 2] with real components in the first column 
-    and imag components in the second column, and db = [..., 2 and da = [..., 2]
-    with real components in the first column and imag components in the second 
-    column.
+    assume x = [..., Ndim], g = [Nt, Ndim], rf = [Nt, 2] with real components
+    in the first column and imag components in the second column, and db = 
+    [..., 2 and da = [..., 2] with real components in the first column and 
+    imag components in the second column.
 
     Args:
         rfp (tensor): rf waveform input.
@@ -145,8 +145,8 @@ def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
     gmag = tb / (N * dt) / dthick / gambar
 
     # get spatial locations + gradient
-    x = torch.arange(0, N * os, 1, device=device) / N / os - 1 / 2
-    gamgdt = 2 * np.pi * gambar * gmag * dt * torch.ones(N, device=device)    
+    x = (torch.arange(0, N * os, 1, device=device) / N / os - 1 / 2)
+    gamgdt = 2 * np.pi * gambar * gmag * dt * torch.ones((N,1), device=device)    
 
     # set up target beta pattern
     d1 = np.sqrt(d1 / 2)  # Mxy -> beta ripple for ex pulse
@@ -168,6 +168,9 @@ def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
     db[:, 0] = np.sqrt(1/2)*dpass*torch.cos(-1/2*x*2*np.pi)
     db[:, 1] = np.sqrt(1/2)*dpass*torch.sin(-1/2*x*2*np.pi)
     db[0, 0] = 0
+    
+    #reshape x for Ndim=1
+    x = x.reshape(N*os, 1)
 
     # initialize optimization
     pulse = torch.full((N,2), 1e-7, requires_grad = True, device = device)
