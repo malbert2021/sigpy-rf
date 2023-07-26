@@ -37,9 +37,9 @@ class TestOptcont(unittest.TestCase):
 
         # Experiment 1: optimize a pulse with same target profile
         _, rf_opt = optcont.optcont1dLBFGS(dthick, N, os, tb, max_iters = 25)
-        rf_test_1 = torch.zeros(N, 2)
-        rf_test_1[:, 0] = torch.real(rf_opt)
-        rf_test_1[:, 1] = torch.imag(rf_opt)
+        rf_test_1 = np.zeros((N, 2))
+        rf_test_1[:, 0] = np.real(rf_opt)
+        rf_test_1[:, 1] = np.imag(rf_opt)
         print('Finish optimize pulse. Time: {:f}'.format(time.time()-t0))
 
         # compare final profiles
@@ -65,12 +65,11 @@ class TestOptcont(unittest.TestCase):
   
         _, _, brSLR, biSLR = optcont.blochsimAD(rfSLR, x/(gambar*dt*gmag), 
                                                 gamgdt, device)
-        _, _, brTest, biTest = optcont.blochsimAD(rf_test_1, x/(gambar*dt*gmag), 
+        _, _, brTest, biTest = optcont.blochsimAD(torch.tensor(rf_test_1), x/(gambar*dt*gmag), 
                                                   gamgdt, device)
 
         # convert to numpy and zero out transiiton band of profiles
         rfSLR = rfSLR.numpy()
-        rf_test_1 = rf_test_1.detach().numpy()    
         brSLR = (w * brSLR).numpy()    
         biSLR = (w * biSLR).numpy()    
         brTest = (w * brTest).detach().numpy()    
