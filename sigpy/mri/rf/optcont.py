@@ -7,6 +7,8 @@ from sigpy.mri.rf import slr
 import numpy as np
 if config.pytorch_enabled:
     import torch
+if config.cupy_enabled:
+    import cupy as cp
 
 
 __all__ = ['blochsimAD', 'blochsim_errAD', 'optcont1dLBFGS', 'optcont1d', 
@@ -191,6 +193,19 @@ def optcont1dLBFGS(dthick, N, os, tb, max_iters=100, d1=0.01,
 
     pulse = pulse[:, 0] + 1j * pulse[:, 1] # pulse in complex form
     
+    # convert to np type
+    gamgdt = gamgdt.detach().numpy()
+    pulse = pulse.detach().numpy()
+
+    # put on correct device
+    if dev == "gpu" and config.cupy_enabled:
+        device = backend.Device(0)
+    else:
+        device = backend.Device(-1)
+    xp = device.xp
+    pulse = xp.array(pulse)
+    gamgdt = xp.array(pulse)
+
     return gamgdt, pulse
 
 
